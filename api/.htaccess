@@ -1,0 +1,6 @@
+# ابقِ رؤوس المصادقة المخصصة متاحة لـ PHP
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule .* - [E=HTTP_X_PARENT_KEY:%{HTTP:X-Parent-Key}]
+RewriteRule .* - [E=HTTP_X_TV_TOKEN:%{HTTP:X-TV-Token}]
+</IfModule>

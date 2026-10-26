@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Family Pager</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pager">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#7b5cf0">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo">❤️</div>
+    <h1>Family Pager</h1>
+  </header>
+
+  <section class="card" id="card-key">
+    <h2>🔑 رمز الأب</h2>
+    <p class="muted" id="key-hint">أدخل الرمز الظاهر في صفحة الإعداد (مرة واحدة فقط).</p>
+    <form id="key-form" class="row">
+      <input id="key-input" type="text" dir="ltr" autocomplete="off" autocapitalize="characters" placeholder="ABCD2345">
+      <button class="btn small" type="submit">حفظ</button>
+    </form>
+  </section>
+
+  <section class="card" id="card-setup">
+    <h2>🔔 الإشعارات</h2>
+    <p id="support-status" class="status">جارٍ الفحص…</p>
+    <button class="btn" id="btn-enable" type="button">تفعيل الإشعارات</button>
+    <button class="btn alt" id="btn-test" type="button">إرسال تنبيه تجريبي إلى هاتفي</button>
+    <p id="action-status" class="status" aria-live="polite"></p>
+  </section>
+
+  <section class="card" id="card-guide">
+    <h2>📲 كيف أجهّز الآيفون؟</h2>
+    <ol>
+      <li>افتح الموقع في <b>Safari</b> (iOS 16.4 أو أحدث).</li>
+      <li>اضغط <b>Share</b> ثم <b>Add to Home Screen</b>.</li>
+      <li>افتح التطبيق من <b>الشاشة الرئيسية</b>.</li>
+      <li>اضغط «تفعيل الإشعارات».</li>
+      <li>وافق على الإذن.</li>
+      <li>اضغط «إرسال تنبيه تجريبي إلى هاتفي».</li>
+    </ol>
+  </section>
+
+  <section class="card" id="card-latest">
+    <h2>📟 آخر طلب</h2>
+    <div id="latest-empty" class="muted">لا يوجد طلب حتى الآن.</div>
+    <div id="latest-body" hidden>
+      <p id="latest-text" class="big"></p>
+      <p id="latest-time" class="muted"></p>
+      <div class="actions" id="latest-actions">
+        <button class="btn good" id="btn-seen" type="button">✅ شفت الرسالة</button>
+        <button class="btn love" id="btn-coming" type="button">❤️ جاي لعندك</button>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

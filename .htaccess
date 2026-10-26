@@ -1,0 +1,11 @@
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+AddType application/manifest+json .webmanifest
+Options -Indexes
+
+<Files "sw.js">
+  Header set Cache-Control "no-cache"
+  Header set Service-Worker-Allowed "/"
+</Files>

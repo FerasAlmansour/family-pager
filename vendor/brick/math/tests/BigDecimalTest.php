@@ -1,0 +1,4646 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Brick\Math\Tests;
+
+use Brick\Math\BigDecimal;
+use Brick\Math\Exception\DivisionByZeroException;
+use Brick\Math\Exception\IntegerOverflowException;
+use Brick\Math\Exception\InvalidArgumentException;
+use Brick\Math\Exception\NegativeNumberException;
+use Brick\Math\Exception\NumberFormatException;
+use Brick\Math\Exception\RoundingNecessaryException;
+use Brick\Math\NumberSyntax;
+use Brick\Math\RoundingMode;
+use Generator;
+use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
+
+use function bin2hex;
+use function in_array;
+use function ini_get;
+use function ini_set;
+use function pack;
+use function serialize;
+use function sprintf;
+use function unserialize;
+
+use const INF;
+use const M_E;
+use const M_PI;
+use const NAN;
+use const PHP_FLOAT_EPSILON;
+use const PHP_FLOAT_MAX;
+use const PHP_FLOAT_MIN;
+use const PHP_INT_MAX;
+use const PHP_INT_MIN;
+
+/**
+ * Unit tests for class BigDecimal.
+ */
+class BigDecimalTest extends AbstractTestCase
+{
+    /**
+     * @param int|string $value    The value to convert to a BigDecimal.
+     * @param string     $expected The expected decimal value.
+     */
+    #[DataProvider('providerOf')]
+    public function testOf(int|string $value, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::of($value));
+    }
+
+    /**
+     * @param int|string $value    The value to convert to a BigDecimal.
+     * @param string     $expected The expected decimal value.
+     */
+    #[DataProvider('providerOf')]
+    public function testOfNullableWithNonNullInput(int|string $value, string $expected): void
+    {
+        $result = BigDecimal::ofNullable($value);
+
+        self::assertNotNull($result);
+        self::assertBigDecimalEquals($expected, $result);
+    }
+
+    public function testOfNullableWithNullInput(): void
+    {
+        self::assertNull(BigDecimal::ofNullable(null));
+    }
+
+    public static function providerOf(): array
+    {
+        return [
+            [0, '0'],
+            [1, '1'],
+            [-1, '-1'],
+            [123456789, '123456789'],
+            [-123456789, '-123456789'],
+            [PHP_INT_MAX, (string) PHP_INT_MAX],
+            [PHP_INT_MIN, (string) PHP_INT_MIN],
+
+            ['0', '0'],
+            ['+0', '0'],
+            ['-0', '0'],
+            ['00', '0'],
+            ['+00', '0'],
+            ['-00', '0'],
+
+            ['1', '1'],
+            ['+1', '1'],
+            ['-1', '-1'],
+            ['01', '1'],
+            ['+01', '1'],
+            ['-01', '-1'],
+
+            ['0.0', '0.0'],
+            ['+0.0', '0.0'],
+            ['-0.0', '0.0'],
+            ['00.0', '0.0'],
+            ['+00.0', '0.0'],
+            ['-00.0', '0.0'],
+
+            ['.0', '0.0'],
+            ['.00', '0.00'],
+            ['.123', '0.123'],
+            ['+.2', '0.2'],
+            ['-.33', '-0.33'],
+            ['1.e2', '100'],
+            ['.1e-1', '0.01'],
+            ['.1e0', '0.1'],
+            ['.1e1', '1'],
+            ['.1e2', '10'],
+            ['1.e-2', '0.01'],
+            ['.1e-2', '0.001'],
+            ['.12e1', '1.2'],
+            ['.012e1', '0.12'],
+            ['-.15e3', '-150'],
+
+            ['1.', '1'],
+            ['+12.', '12'],
+            ['-123.', '-123'],
+
+            ['1.0', '1.0'],
+            ['+1.0', '1.0'],
+            ['-1.0', '-1.0'],
+            ['01.0', '1.0'],
+            ['+01.0', '1.0'],
+            ['-01.0', '-1.0'],
+
+            ['0.1', '0.1'],
+            ['+0.1', '0.1'],
+            ['-0.1', '-0.1'],
+            ['0.10', '0.10'],
+            ['+0.10', '0.10'],
+            ['-0.10', '-0.10'],
+            ['0.010', '0.010'],
+            ['+0.010', '0.010'],
+            ['-0.010', '-0.010'],
+
+            ['00.1', '0.1'],
+            ['+00.1', '0.1'],
+            ['-00.1', '-0.1'],
+            ['00.10', '0.10'],
+            ['+00.10', '0.10'],
+            ['-00.10', '-0.10'],
+            ['00.010', '0.010'],
+            ['+00.010', '0.010'],
+            ['-00.010', '-0.010'],
+
+            ['01.1', '1.1'],
+            ['+01.1', '1.1'],
+            ['-01.1', '-1.1'],
+            ['01.010', '1.010'],
+            ['+01.010', '1.010'],
+            ['-01.010', '-1.010'],
+
+            ['0e-2', '0.00'],
+            ['0e-1', '0.0'],
+            ['0e-0', '0'],
+            ['0e0', '0'],
+            ['0e1', '0'],
+            ['0e2', '0'],
+            ['0e+0', '0'],
+            ['0e+1', '0'],
+            ['0e+2', '0'],
+
+            ['0.0e-2', '0.000'],
+            ['0.0e-1', '0.00'],
+            ['0.0e-0', '0.0'],
+            ['0.0e0', '0.0'],
+            ['0.0e1', '0'],
+            ['0.0e2', '0'],
+            ['0.0e+0', '0.0'],
+            ['0.0e+1', '0'],
+            ['0.0e+2', '0'],
+
+            ['0.1e-2', '0.001'],
+            ['0.1e-1', '0.01'],
+            ['0.1e-0', '0.1'],
+            ['0.1e0', '0.1'],
+            ['0.1e1', '1'],
+            ['0.1e2', '10'],
+            ['0.1e+0', '0.1'],
+            ['0.1e+1', '1'],
+            ['0.1e+2', '10'],
+            ['1.23e+011', '123000000000'],
+            ['1.23e-011', '0.0000000000123'],
+
+            ['0.01e-2', '0.0001'],
+            ['0.01e-1', '0.001'],
+            ['0.01e-0', '0.01'],
+            ['0.01e0', '0.01'],
+            ['0.01e1', '0.1'],
+            ['0.01e2', '1'],
+            ['0.01e+0', '0.01'],
+            ['0.01e+1', '0.1'],
+            ['0.01e+2', '1'],
+
+            ['0.10e-2', '0.0010'],
+            ['0.10e-1', '0.010'],
+            ['0.10e-0', '0.10'],
+            ['0.10e0', '0.10'],
+            ['0.10e1', '1.0'],
+            ['0.10e2', '10'],
+            ['0.10e+0', '0.10'],
+            ['0.10e+1', '1.0'],
+            ['0.10e+2', '10'],
+
+            ['00.10e-2', '0.0010'],
+            ['+00.10e-1', '0.010'],
+            ['-00.10e-0', '-0.10'],
+            ['00.10e0', '0.10'],
+            ['+00.10e1', '1.0'],
+            ['-00.10e2', '-10'],
+            ['00.10e+0', '0.10'],
+            ['+00.10e+1', '1.0'],
+            ['-00.10e+2', '-10'],
+        ];
+    }
+
+    public function testOfEmptyStringThrowsException(): void
+    {
+        $this->expectException(NumberFormatException::class);
+        $this->expectExceptionMessageExact('The number must not be empty.');
+
+        BigDecimal::of('');
+    }
+
+    /**
+     * @param string      $value                  The invalid value.
+     * @param string|null $expectedValueInMessage The value as rendered in the message, if it differs from $value.
+     */
+    #[DataProvider('providerOfInvalidFormatThrowsException')]
+    public function testOfInvalidFormatThrowsException(string $value, ?string $expectedValueInMessage = null): void
+    {
+        $this->expectException(NumberFormatException::class);
+        $this->expectExceptionMessageExact(sprintf('Value "%s" does not represent a valid number.', $expectedValueInMessage ?? $value));
+
+        BigDecimal::of($value);
+    }
+
+    public static function providerOfInvalidFormatThrowsException(): array
+    {
+        return [
+            ['a'],
+            [' 1'],
+            ['1 '],
+            ["\n1.2", '\n1.2'],
+            ["1.2\n", '1.2\n'],
+            ["1e2\n", '1e2\n'],
+            ['..1'],
+            ['1..'],
+            ['.1.'],
+            ['+'],
+            ['-'],
+            ['.'],
+            ['1e'],
+            ['.e'],
+            ['.e1'],
+            ['1e+'],
+            ['1e-'],
+            ['+e1'],
+            ['-e2'],
+            ['.e3'],
+            ['+a'],
+            ['-a'],
+        ];
+    }
+
+    #[DataProvider('providerOfExponentTooLargeThrowsException')]
+    public function testOfExponentTooLargeThrowsException(string $value): void
+    {
+        $this->expectException(NumberFormatException::class);
+        $this->expectExceptionMessageExact('The exponent is too large to be represented as an integer.');
+
+        BigDecimal::of($value);
+    }
+
+    public static function providerOfExponentTooLargeThrowsException(): array
+    {
+        return [
+            // Exponent string does not fit in a native integer.
+            ['1e1000000000000000000000000000000'],
+            ['1e-1000000000000000000000000000000'],
+
+            // Exponent fits in a native integer, but computing the scale as
+            // strlen(fractional) - exponent overflows the native integer range.
+            ['1.5e-' . PHP_INT_MAX],
+            ['1.25e-' . PHP_INT_MAX],
+        ];
+    }
+
+    public function testOfBigDecimalReturnsThis(): void
+    {
+        $decimal = BigDecimal::of(123);
+
+        self::assertSame($decimal, BigDecimal::of($decimal));
+    }
+
+    public function testParseConvertibleValue(): void
+    {
+        // 2 digits as parsed, but the converted result has 3
+        self::assertBigDecimalEquals('0.25', BigDecimal::parse('1/4', NumberSyntax::RATIONAL, 3));
+    }
+
+    public function testParseConvertedValueExceedingMaxDigitsThrowsException(): void
+    {
+        $this->expectException(NumberFormatException::class);
+        $this->expectExceptionMessageExact('The number exceeds the maximum number of 2 digits.');
+
+        // 2 digits as parsed, but the converted result 0.25 has 3
+        BigDecimal::parse('1/4', allowedSyntax: NumberSyntax::RATIONAL, maxDigits: 2);
+    }
+
+    public function testParseNonConvertibleValueThrowsException(): void
+    {
+        $this->expectException(RoundingNecessaryException::class);
+        $this->expectExceptionMessageExact('This rational number has a non-terminating decimal expansion and cannot be represented as a decimal without rounding.');
+
+        BigDecimal::parse('1/3', allowedSyntax: NumberSyntax::RATIONAL, maxDigits: 2);
+    }
+
+    public function testParseNullableConvertibleValue(): void
+    {
+        // 2 digits as parsed, but the converted result has 4
+        $result = BigDecimal::parseNullable('1/8', NumberSyntax::RATIONAL, 4);
+
+        self::assertNotNull($result);
+        self::assertBigDecimalEquals('0.125', $result);
+    }
+
+    public function testParseNullableConvertedValueExceedingMaxDigitsThrowsException(): void
+    {
+        $this->expectException(NumberFormatException::class);
+        $this->expectExceptionMessageExact('The number exceeds the maximum number of 3 digits.');
+
+        // 2 digits as parsed, but the converted result 0.125 has 4
+        BigDecimal::parseNullable('1/8', allowedSyntax: NumberSyntax::RATIONAL, maxDigits: 3);
+    }
+
+    public function testParseNullableNonConvertibleValueThrowsException(): void
+    {
+        $this->expectException(RoundingNecessaryException::class);
+        $this->expectExceptionMessageExact('This rational number has a non-terminating decimal expansion and cannot be represented as a decimal without rounding.');
+
+        BigDecimal::parseNullable('1/7', allowedSyntax: NumberSyntax::RATIONAL, maxDigits: 2);
+    }
+
+    /**
+     * @param int|string $unscaledValue The unscaled value of the BigDecimal to create.
+     * @param int        $scale         The scale of the BigDecimal to create.
+     * @param string     $expected      The expected decimal result.
+     */
+    #[DataProvider('providerOfUnscaledValue')]
+    public function testOfUnscaledValue(int|string $unscaledValue, int $scale, string $expected): void
+    {
+        $number = BigDecimal::ofUnscaledValue($unscaledValue, $scale);
+        self::assertBigDecimalEquals($expected, $number);
+    }
+
+    public static function providerOfUnscaledValue(): array
+    {
+        return [
+            [0, -2, '0'],
+            [0, -1, '0'],
+            [0, 0, '0'],
+            [0, 1, '0.0'],
+            [0, 2, '0.00'],
+
+            [123456789, -2, '12345678900'],
+            [123456789, -1, '1234567890'],
+            [123456789, 0, '123456789'],
+            [123456789, 1, '12345678.9'],
+
+            [-123456789, -2, '-12345678900'],
+            [-123456789, -1, '-1234567890'],
+            [-123456789, 0, '-123456789'],
+            [-123456789, 1, '-12345678.9'],
+
+            ['123456789012345678901234567890', -1, '1234567890123456789012345678900'],
+            ['123456789012345678901234567890', 0, '123456789012345678901234567890'],
+            ['123456789012345678901234567890', 1, '12345678901234567890123456789.0'],
+            ['+123456789012345678901234567890', -1, '1234567890123456789012345678900'],
+            ['+123456789012345678901234567890', 0, '123456789012345678901234567890'],
+            ['+123456789012345678901234567890', 1, '12345678901234567890123456789.0'],
+            ['-123456789012345678901234567890', -1, '-1234567890123456789012345678900'],
+            ['-123456789012345678901234567890', 0, '-123456789012345678901234567890'],
+            ['-123456789012345678901234567890', 1, '-12345678901234567890123456789.0'],
+
+            ['0123456789012345678901234567890', -1, '1234567890123456789012345678900'],
+            ['0123456789012345678901234567890', 0, '123456789012345678901234567890'],
+            ['0123456789012345678901234567890', 1, '12345678901234567890123456789.0'],
+            ['+0123456789012345678901234567890', -1, '1234567890123456789012345678900'],
+            ['+0123456789012345678901234567890', 0, '123456789012345678901234567890'],
+            ['+0123456789012345678901234567890', 1, '12345678901234567890123456789.0'],
+            ['-0123456789012345678901234567890', -1, '-1234567890123456789012345678900'],
+            ['-0123456789012345678901234567890', 0, '-123456789012345678901234567890'],
+            ['-0123456789012345678901234567890', 1, '-12345678901234567890123456789.0'],
+        ];
+    }
+
+    #[DataProvider('providerOfUnscaledValueToString')]
+    public function testOfUnscaledValueToString(string $unscaledValue, int $scale, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::ofUnscaledValue($unscaledValue, $scale));
+    }
+
+    public static function providerOfUnscaledValueToString(): array
+    {
+        return [
+            ['-1', -1, '-10'],
+            ['-1', 0, '-1'],
+            ['-1', 1, '-0.1'],
+
+            ['-0', -1, '0'],
+            ['-0', 0, '0'],
+            ['-0', 1, '0.0'],
+
+            ['0', -1, '0'],
+            ['0', 0, '0'],
+            ['0', 1, '0.0'],
+
+            ['1', -1, '10'],
+            ['1', 0, '1'],
+            ['1', 1, '0.1'],
+
+            ['-123', -3, '-123000'],
+            ['-123', -2, '-12300'],
+            ['-123', -1, '-1230'],
+            ['-123', 0, '-123'],
+            ['-123', 1, '-12.3'],
+            ['-123', 2, '-1.23'],
+            ['-123', 3, '-0.123'],
+            ['-123', 4, '-0.0123'],
+
+            ['123', -3, '123000'],
+            ['123', -2, '12300'],
+            ['123', -1, '1230'],
+            ['123', 0, '123'],
+            ['123', 1, '12.3'],
+            ['123', 2, '1.23'],
+            ['123', 3, '0.123'],
+            ['123', 4, '0.0123'],
+        ];
+    }
+
+    public function testOfUnscaledValueWithDefaultScale(): void
+    {
+        $number = BigDecimal::ofUnscaledValue('123456789');
+        self::assertBigDecimalEquals('123456789', $number);
+    }
+
+    public function testZero(): void
+    {
+        self::assertBigDecimalEquals('0', BigDecimal::zero());
+        self::assertSame(BigDecimal::zero(), BigDecimal::zero());
+    }
+
+    public function testOne(): void
+    {
+        self::assertBigDecimalEquals('1', BigDecimal::one());
+        self::assertSame(BigDecimal::one(), BigDecimal::one());
+    }
+
+    public function testTen(): void
+    {
+        self::assertBigDecimalEquals('10', BigDecimal::ten());
+        self::assertSame(BigDecimal::ten(), BigDecimal::ten());
+    }
+
+    /**
+     * @param list<int|string> $values The values to compare.
+     * @param string           $min    The expected minimum value.
+     */
+    #[DataProvider('providerMin')]
+    public function testMin(array $values, string $min): void
+    {
+        self::assertBigDecimalEquals($min, BigDecimal::min(...$values));
+    }
+
+    public static function providerMin(): array
+    {
+        return [
+            [[0, 1, -1], '-1'],
+            [[0, 1, -1, '-1.2'], '-1.2'],
+            [['1e30', '123456789123456789123456789', '2e25'], '20000000000000000000000000'],
+            [['1e30', '123456789123456789123456789', '2e26'], '123456789123456789123456789'],
+            [[0, '10', '5989', '-3/3'], '-1'],
+            [['-0.0000000000000000000000000000001', '0'], '-0.0000000000000000000000000000001'],
+            [['0.00000000000000000000000000000001', '0'], '0'],
+            [['-1', '1', '2', '3', '-2973/30'], '-99.1'],
+            [['999999999999999999999999999.99999999999', '1000000000000000000000000000'], '999999999999999999999999999.99999999999'],
+            [['-999999999999999999999999999.99999999999', '-1000000000000000000000000000'], '-1000000000000000000000000000'],
+            [['9.9e50', '1e50'], '100000000000000000000000000000000000000000000000000'],
+            [['9.9e50', '1e51'], '990000000000000000000000000000000000000000000000000'],
+        ];
+    }
+
+    public function testMinOfNonDecimalValuesThrowsException(): void
+    {
+        $this->expectException(RoundingNecessaryException::class);
+        $this->expectExceptionMessageExact('This rational number has a non-terminating decimal expansion and cannot be represented as a decimal without rounding.');
+
+        BigDecimal::min(1, '1/3');
+    }
+
+    /**
+     * @param list<int|string> $values The values to compare.
+     * @param string           $max    The expected maximum value.
+     */
+    #[DataProvider('providerMax')]
+    public function testMax(array $values, string $max): void
+    {
+        self::assertBigDecimalEquals($max, BigDecimal::max(...$values));
+    }
+
+    public static function providerMax(): array
+    {
+        return [
+            [[0, '0.9', '-1.00'], '0.9'],
+            [[0, '0.01', -1, '-1.2'], '0.01'],
+            [[0, '0.01', -1, '-1.2', '2e-1'], '0.2'],
+            [['1e-30', '123456789123456789123456789', '2e25'], '123456789123456789123456789'],
+            [['1e-30', '123456789123456789123456789', '2e26'], '200000000000000000000000000'],
+            [[0, '10', '5989', '-1'], '5989'],
+            [[0, '10', '5989', '5989.000000000000000000000000000000001', '-1'], '5989.000000000000000000000000000000001'],
+            [[0, '10', '5989', '5989.000000000000000000000000000000001', '-1', '5990'], '5990'],
+            [['-0.0000000000000000000000000000001', 0], '0'],
+            [['0.00000000000000000000000000000001', '0'], '0.00000000000000000000000000000001'],
+            [['-1', '1', '2', '3', '-99.1'], '3'],
+            [['-1', '1', '2', '3', '-99.1', '31/10'], '3.1'],
+            [['999999999999999999999999999.99999999999', '1000000000000000000000000000'], '1000000000000000000000000000'],
+            [['-999999999999999999999999999.99999999999', '-1000000000000000000000000000'], '-999999999999999999999999999.99999999999'],
+            [['9.9e50', '1e50'], '990000000000000000000000000000000000000000000000000'],
+            [['9.9e50', '1e51'], '1000000000000000000000000000000000000000000000000000'],
+        ];
+    }
+
+    public function testMaxOfNonDecimalValuesThrowsException(): void
+    {
+        $this->expectException(RoundingNecessaryException::class);
+        $this->expectExceptionMessageExact('This rational number has a non-terminating decimal expansion and cannot be represented as a decimal without rounding.');
+
+        BigDecimal::max(1, '3/7');
+    }
+
+    /**
+     * @param list<int|string> $values The values to add.
+     * @param string           $sum    The expected sum.
+     */
+    #[DataProvider('providerSum')]
+    public function testSum(array $values, string $sum): void
+    {
+        self::assertBigDecimalEquals($sum, BigDecimal::sum(...$values));
+    }
+
+    public static function providerSum(): array
+    {
+        return [
+            [[0, '0.9', '-1.00'], '-0.10'],
+            [[0, '0.01', -1, '-1.2'], '-2.19'],
+            [[0, '0.01', -1, '-1.2', '2e-1'], '-1.99'],
+            [['1e-30', '123456789123456789123456789', '2e25'], '143456789123456789123456789.000000000000000000000000000001'],
+            [['1e-30', '123456789123456789123456789', '2e26'], '323456789123456789123456789.000000000000000000000000000001'],
+            [[0, '10', '5989', '-1'], '5998'],
+            [[0, '10', '5989', '5989.000000000000000000000000000000001', '-1'], '11987.000000000000000000000000000000001'],
+            [[0, '10', '5989', '5989.000000000000000000000000000000001', '-1', '5990'], '17977.000000000000000000000000000000001'],
+            [['-0.0000000000000000000000000000001', 0], '-0.0000000000000000000000000000001'],
+            [['0.00000000000000000000000000000001', '0'], '0.00000000000000000000000000000001'],
+            [['-1', '1', '2', '3', '-99.1'], '-94.1'],
+            [['-1', '1', '2', '3', '-99.1', '31/10'], '-91.0'],
+            [['999999999999999999999999999.99999999999', '1000000000000000000000000000'], '1999999999999999999999999999.99999999999'],
+            [['-999999999999999999999999999.99999999999', 47, '-1000000000000000000000000000'], '-1999999999999999999999999952.99999999999'],
+            [['9.9e50', '1e50', '-3/2'], '1089999999999999999999999999999999999999999999999998.5'],
+            [['9.9e50', '-1e-51'], '989999999999999999999999999999999999999999999999999.999999999999999999999999999999999999999999999999999'],
+        ];
+    }
+
+    public function testSumOfNonDecimalValuesThrowsException(): void
+    {
+        $this->expectException(RoundingNecessaryException::class);
+        $this->expectExceptionMessageExact('This rational number has a non-terminating decimal expansion and cannot be represented as a decimal without rounding.');
+
+        BigDecimal::sum(1, '3/7');
+    }
+
+    /**
+     * @param string $a        The base number.
+     * @param string $b        The number to add.
+     * @param string $expected The expected result.
+     */
+    #[DataProvider('providerPlus')]
+    public function testPlus(string $a, string $b, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::of($a)->plus($b));
+    }
+
+    public static function providerPlus(): array
+    {
+        return [
+            ['123',    '999',    '1122'],
+            ['123',    '999.0',  '1122.0'],
+            ['123',    '999.00', '1122.00'],
+            ['123.0',  '999',    '1122.0'],
+            ['123.0',  '999.0',  '1122.0'],
+            ['123.0',  '999.00', '1122.00'],
+            ['123.00', '999',    '1122.00'],
+            ['123.00', '999.0',  '1122.00'],
+            ['123.00', '999.00', '1122.00'],
+
+            ['0',    '999',    '999'],
+            ['0',    '999.0',  '999.0'],
+            ['0',    '999.00', '999.00'],
+            ['0.0',  '999',    '999.0'],
+            ['0.0',  '999.0',  '999.0'],
+            ['0.0',  '999.00', '999.00'],
+            ['0.00', '999',    '999.00'],
+            ['0.00', '999.0',  '999.00'],
+            ['0.00', '999.00', '999.00'],
+
+            ['123',    '-999',    '-876'],
+            ['123',    '-999.0',  '-876.0'],
+            ['123',    '-999.00', '-876.00'],
+            ['123.0',  '-999',    '-876.0'],
+            ['123.0',  '-999.0',  '-876.0'],
+            ['123.0',  '-999.00', '-876.00'],
+            ['123.00', '-999',    '-876.00'],
+            ['123.00', '-999.0',  '-876.00'],
+            ['123.00', '-999.00', '-876.00'],
+
+            ['-123',    '999',    '876'],
+            ['-123',    '999.0',  '876.0'],
+            ['-123',    '999.00', '876.00'],
+            ['-123.0',  '999',    '876.0'],
+            ['-123.0',  '999.0',  '876.0'],
+            ['-123.0',  '999.00', '876.00'],
+            ['-123.00', '999',    '876.00'],
+            ['-123.00', '999.0',  '876.00'],
+            ['-123.00', '999.00', '876.00'],
+
+            ['-123',    '-999',    '-1122'],
+            ['-123',    '-999.0',  '-1122.0'],
+            ['-123',    '-999.00', '-1122.00'],
+            ['-123.0',  '-999',    '-1122.0'],
+            ['-123.0',  '-999.0',  '-1122.0'],
+            ['-123.0',  '-999.00', '-1122.00'],
+            ['-123.00', '-999',    '-1122.00'],
+            ['-123.00', '-999.0',  '-1122.00'],
+            ['-123.00', '-999.00', '-1122.00'],
+
+            ['23487837847837428335.322387091', '309049304233535454687656.2392', '309072792071383292115991.561587091'],
+            ['-234878378478328335.322387091', '309049304233535154687656.232', '309049069355156676359320.909612909'],
+            ['234878378478328335.3227091', '-3090495154687656.231343344452', '231787883323640679.091365755548'],
+            ['-23487837847833435.3231', '-3090495154687656.231343344452', '-26578333002521091.554443344452'],
+
+            ['1234568798347983.2334899238921', '0', '1234568798347983.2334899238921'],
+            ['-0.00223287647368738736428467863784', '0.000', '-0.00223287647368738736428467863784'],
+        ];
+    }
+
+    /**
+     * @param string $a        The base number.
+     * @param string $b        The number to subtract.
+     * @param string $expected The expected result.
+     */
+    #[DataProvider('providerMinus')]
+    public function testMinus(string $a, string $b, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::of($a)->minus($b));
+    }
+
+    public static function providerMinus(): array
+    {
+        return [
+            ['123', '999', '-876'],
+            ['123', '999.0', '-876.0'],
+            ['123', '999.00', '-876.00'],
+            ['123.0', '999', '-876.0'],
+            ['123.0', '999.0', '-876.0'],
+            ['123.0', '999.00', '-876.00'],
+            ['123.00', '999', '-876.00'],
+            ['123.00', '999.0', '-876.00'],
+            ['123.00', '999.00', '-876.00'],
+            ['0', '999', '-999'],
+            ['0', '999.0', '-999.0'],
+
+            ['123', '-999', '1122'],
+            ['123', '-999.0', '1122.0'],
+            ['123', '-999.00', '1122.00'],
+            ['123.0', '-999', '1122.0'],
+            ['123.0', '-999.0', '1122.0'],
+            ['123.0', '-999.00', '1122.00'],
+            ['123.00', '-999', '1122.00'],
+            ['123.00', '-999.0', '1122.00'],
+            ['123.00', '-999.00', '1122.00'],
+
+            ['-123', '999', '-1122'],
+            ['-123', '999.0', '-1122.0'],
+            ['-123', '999.00', '-1122.00'],
+            ['-123.0', '999', '-1122.0'],
+            ['-123.0', '999.0', '-1122.0'],
+            ['-123.0', '999.00', '-1122.00'],
+            ['-123.00', '999', '-1122.00'],
+            ['-123.00', '999.0', '-1122.00'],
+            ['-123.00', '999.00', '-1122.00'],
+
+            ['-123', '-999', '876'],
+            ['-123', '-999.0', '876.0'],
+            ['-123', '-999.00', '876.00'],
+            ['-123.0', '-999', '876.0'],
+            ['-123.0', '-999.0', '876.0'],
+            ['-123.0', '-999.00', '876.00'],
+            ['-123.00', '-999', '876.00'],
+            ['-123.00', '-999.0', '876.00'],
+            ['-123.00', '-999.00', '876.00'],
+
+            ['234878378477428335.3223334343487091', '309049304233536.2392', '234569329173194799.0831334343487091'],
+            ['-2348783784774335.32233343434891', '309049304233536.233392', '-2657833089007871.55572543434891'],
+            ['2348783784774335.323232342791', '-309049304233536.556172', '2657833089007871.879404342791'],
+            ['-2348783784774335.3232342791', '-309049304233536.556172', '-2039734480540798.7670622791'],
+
+            ['1234568798347983.2334899238921', '0', '1234568798347983.2334899238921'],
+            ['0', '1234568798347983.2334899238921', '-1234568798347983.2334899238921'],
+            ['-0.00223287647368738736428467863784', '0.000', '-0.00223287647368738736428467863784'],
+        ];
+    }
+
+    /**
+     * @param string $a        The base number.
+     * @param string $b        The number to multiply.
+     * @param string $expected The expected result.
+     */
+    #[DataProvider('providerMultipliedBy')]
+    public function testMultipliedBy(string $a, string $b, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::of($a)->multipliedBy($b));
+    }
+
+    public static function providerMultipliedBy(): array
+    {
+        return [
+            ['123', '999', '122877'],
+            ['123', '999.0', '122877.0'],
+            ['123', '999.00', '122877.00'],
+            ['123.0', '999', '122877.0'],
+            ['123.0', '999.0', '122877.00'],
+            ['123.0', '999.00', '122877.000'],
+            ['123.00', '999', '122877.00'],
+            ['123.00', '999.0', '122877.000'],
+            ['123.00', '999.00', '122877.0000'],
+
+            ['123.0', '0.1', '12.30'],
+            ['123.0', '0.01', '1.230'],
+            ['123.1', '0.01', '1.231'],
+            ['123.1', '0.001', '0.1231'],
+
+            ['123', '-999', '-122877'],
+            ['123', '-999.0', '-122877.0'],
+            ['123', '-999.00', '-122877.00'],
+            ['123.0', '-999', '-122877.0'],
+            ['123.0', '-999.0', '-122877.00'],
+            ['123.0', '-999.00', '-122877.000'],
+            ['123.00', '-999', '-122877.00'],
+            ['123.00', '-999.0', '-122877.000'],
+            ['123.00', '-999.00', '-122877.0000'],
+
+            ['-123', '999', '-122877'],
+            ['-123', '999.0', '-122877.0'],
+            ['-123', '999.00', '-122877.00'],
+            ['-123.0', '999', '-122877.0'],
+            ['-123.0', '999.0', '-122877.00'],
+            ['-123.0', '999.00', '-122877.000'],
+            ['-123.00', '999', '-122877.00'],
+            ['-123.00', '999.0', '-122877.000'],
+            ['-123.00', '999.00', '-122877.0000'],
+
+            ['-123', '-999', '122877'],
+            ['-123', '-999.0', '122877.0'],
+            ['-123', '-999.00', '122877.00'],
+            ['-123.0', '-999', '122877.0'],
+            ['-123.0', '-999.0', '122877.00'],
+            ['-123.0', '-999.00', '122877.000'],
+            ['-123.00', '-999', '122877.00'],
+            ['-123.00', '-999.0', '122877.000'],
+            ['-123.00', '-999.00', '122877.0000'],
+
+            ['1', '999', '999'],
+            ['1', '999.0', '999.0'],
+            ['1', '999.00', '999.00'],
+            ['1.0', '999', '999.0'],
+            ['1.0', '999.0', '999.00'],
+            ['1.0', '999.00', '999.000'],
+            ['1.00', '999', '999.00'],
+            ['1.00', '999.0', '999.000'],
+            ['1.00', '999.00', '999.0000'],
+
+            ['123', '1', '123'],
+            ['123', '1.0', '123.0'],
+            ['123', '1.00', '123.00'],
+            ['123.0', '1', '123.0'],
+            ['123.0', '1.0', '123.00'],
+            ['123.0', '1.00', '123.000'],
+            ['123.00', '1', '123.00'],
+            ['123.00', '1.0', '123.000'],
+            ['123.00', '1.00', '123.0000'],
+
+            ['0', '999', '0'],
+            ['0', '999.0', '0.0'],
+            ['0', '999.00', '0.00'],
+            ['0.0', '999', '0.0'],
+            ['0.0', '999.0', '0.00'],
+            ['0.0', '999.00', '0.000'],
+            ['0.00', '999', '0.00'],
+            ['0.00', '999.0', '0.000'],
+            ['0.00', '999.00', '0.0000'],
+
+            ['123', '0', '0'],
+            ['123', '0.0', '0.0'],
+            ['123', '0.00', '0.00'],
+            ['123.0', '0', '0.0'],
+            ['123.0', '0.0', '0.00'],
+            ['123.0', '0.00', '0.000'],
+            ['123.00', '0', '0.00'],
+            ['123.00', '0.0', '0.000'],
+            ['123.00', '0.00', '0.0000'],
+
+            ['589252.156111130', '999.2563989942545241223454', '588813987.6152080735720775399923986443020'],
+            ['-589252.15611130', '999.256398994254524122354', '-588813987.61537794715991163083004200020'],
+            ['589252.1561113', '-99.256398994254524122354', '-58487047.1152079471599116308300420002'],
+            ['-58952.156111', '-9.256398994254524122357', '545684.678534996098129205129273627'],
+
+            ['0.1235437849158495728979344999999999999', '1', '0.1235437849158495728979344999999999999'],
+            ['-1.324985980890283098409328999999999999', '1', '-1.324985980890283098409328999999999999'],
+        ];
+    }
+
+    /**
+     * @param string           $a            The base number.
+     * @param string           $b            The number to divide.
+     * @param non-negative-int $scale        The desired scale of the result.
+     * @param RoundingMode     $roundingMode The rounding mode.
+     * @param string           $expected     The expected result, or 'DIVISION_NOT_EXACT'|'SCALE_TOO_SMALL' if an exception is expected.
+     */
+    #[DataProvider('providerDividedBy')]
+    public function testDividedBy(string $a, string $b, int $scale, RoundingMode $roundingMode, string $expected): void
+    {
+        $number = BigDecimal::of($a);
+
+        $expectedExceptionMessage = match ($expected) {
+            'DIVISION_NOT_EXACT' => 'The division yields a non-terminating decimal expansion and cannot be represented as a decimal without rounding.',
+            'SCALE_TOO_SMALL' => 'The division result is exact but cannot be represented at the requested scale without rounding.',
+            default => null,
+        };
+
+        if ($expectedExceptionMessage !== null) {
+            $this->expectException(RoundingNecessaryException::class);
+            $this->expectExceptionMessageExact($expectedExceptionMessage);
+        }
+
+        $decimal = $number->dividedBy($b, $scale, $roundingMode);
+
+        if ($expectedExceptionMessage === null) {
+            self::assertBigDecimalEquals($expected, $decimal);
+        }
+    }
+
+    public static function providerDividedBy(): array
+    {
+        return [
+            ['7',  '0.2', 0, RoundingMode::Unnecessary,  '35'],
+            ['7', '-0.2', 0, RoundingMode::Unnecessary, '-35'],
+            ['-7',  '0.2', 0, RoundingMode::Unnecessary, '-35'],
+            ['-7', '-0.2', 0, RoundingMode::Unnecessary, '35'],
+
+            ['1234567890123456789', '0.01', 0,  RoundingMode::Unnecessary, '123456789012345678900'],
+            ['1234567890123456789', '0.010', 0, RoundingMode::Unnecessary, '123456789012345678900'],
+
+            ['1324794783847839472983.343898', '1', 6, RoundingMode::Unnecessary, '1324794783847839472983.343898'],
+            ['-32479478384783947298.3343898', '1', 7, RoundingMode::Unnecessary, '-32479478384783947298.3343898'],
+
+            ['1324794783847839472983.3438980', '1', 6, RoundingMode::Unnecessary, '1324794783847839472983.343898'],
+            ['-32479478384783947298.33438980', '1', 7, RoundingMode::Unnecessary, '-32479478384783947298.3343898'],
+
+            ['1324794783847839472983.343898', '1', 5, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['-32479478384783947298.3343898', '1', 6, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+
+            ['1.5', '2', 2, RoundingMode::Unnecessary, '0.75'],
+            ['1.5', '3', 1, RoundingMode::Unnecessary, '0.5'],
+            ['0.123456789', '0.00244140625', 10, RoundingMode::Unnecessary, '50.5679007744'],
+            ['1.234', '123.456', 50, RoundingMode::Down, '0.00999546397096941420425090720580611715914981855883'],
+            ['1', '3', 10, RoundingMode::Up, '0.3333333334'],
+            ['0.124', '0.2', 3, RoundingMode::Unnecessary, '0.620'],
+            ['0.124', '2', 3, RoundingMode::Unnecessary, '0.062'],
+
+            ['1.234', '123.456', 3, RoundingMode::Unnecessary, 'DIVISION_NOT_EXACT'],
+            ['7', '2', 0, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['7', '3', 100, RoundingMode::Unnecessary, 'DIVISION_NOT_EXACT'],
+        ];
+    }
+
+    #[DataProvider('providerDividedByZeroThrowsException')]
+    public function testDividedByZeroThrowsException(int|string $zero): void
+    {
+        $one = BigDecimal::one();
+
+        $this->expectException(DivisionByZeroException::class);
+        $this->expectExceptionMessageExact('Division by zero.');
+
+        $one->dividedBy($zero, 0);
+    }
+
+    public static function providerDividedByZeroThrowsException(): array
+    {
+        return [
+            [0],
+            ['0'],
+            ['0.0'],
+            ['0.00'],
+        ];
+    }
+
+    public function testDividedByWithNegativeScaleThrowsException(): void
+    {
+        $one = BigDecimal::one();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('The scale must not be negative.');
+
+        // @phpstan-ignore argument.type
+        $one->dividedBy(2, -1);
+    }
+
+    /**
+     * @param int|string $number   The number to divide.
+     * @param int|string $divisor  The divisor.
+     * @param string     $expected The expected result, or a class name if an exception is expected.
+     */
+    #[DataProvider('providerDividedByExact')]
+    public function testDividedByExact(int|string $number, int|string $divisor, string $expected): void
+    {
+        $number = BigDecimal::of($number);
+
+        if (self::isException($expected)) {
+            $this->expectException($expected);
+            $this->expectExceptionMessageExact(match ($expected) { // @phpstan-ignore match.unhandled
+                RoundingNecessaryException::class => 'The division yields a non-terminating decimal expansion and cannot be represented as a decimal without rounding.',
+                DivisionByZeroException::class => 'Division by zero.',
+            });
+        }
+
+        $actual = $number->dividedByExact($divisor);
+
+        if (! self::isException($expected)) {
+            self::assertBigDecimalEquals($expected, $actual);
+        }
+    }
+
+    public static function providerDividedByExact(): array
+    {
+        return [
+            [1, 1, '1'],
+            ['1.0', '1.00', '1'],
+            [1, 2, '0.5'],
+            [1, 3, RoundingNecessaryException::class],
+            [1, 4, '0.25'],
+            [1, 5, '0.2'],
+            [1, 6, RoundingNecessaryException::class],
+            [1, 7, RoundingNecessaryException::class],
+            [1, 8, '0.125'],
+            [1, 9, RoundingNecessaryException::class],
+            [1, 10, '0.1'],
+            ['6', '3', '2'],
+            ['9.9999999999999999999999999999999999999999', '3', '3.3333333333333333333333333333333333333333'],
+            ['1.0', 2, '0.5'],
+            ['1.00', 2, '0.5'],
+            ['1.0000', 8, '0.125'],
+            [1, '4.000', '0.25'],
+            ['1', '0.125', '8'],
+            ['1.0', '0.125', '8'],
+            ['1234.5678', '2', '617.2839'],
+            ['1234.5678', '4', '308.64195'],
+            ['1234.5678', '8', '154.320975'],
+            ['1234.5678', '6.4', '192.90121875'],
+            ['7', '3125', '0.00224'],
+            ['4849709849456546549849846510128399', '18014398509481984', '269212976880902984.935786476657271160117801400701864622533321380615234375'],
+            ['4849709849456546549849846510128399', '-18014398509481984', '-269212976880902984.935786476657271160117801400701864622533321380615234375'],
+            ['-4849709849456546549849846510128399', '18014398509481984', '-269212976880902984.935786476657271160117801400701864622533321380615234375'],
+            ['-4849709849456546549849846510128399', '-18014398509481984', '269212976880902984.935786476657271160117801400701864622533321380615234375'],
+            ['123', '0', DivisionByZeroException::class],
+            [-789, '0.0', DivisionByZeroException::class],
+        ];
+    }
+
+    public function testDividedByExactWithZero(): void
+    {
+        $one = BigDecimal::one();
+
+        $this->expectException(DivisionByZeroException::class);
+        $this->expectExceptionMessageExact('Division by zero.');
+
+        $one->dividedByExact(0);
+    }
+
+    /**
+     * @param RoundingMode $roundingMode The rounding mode.
+     * @param string       $number       The number to round.
+     * @param string|null  $two          The expected rounding to a scale of two, or null if an exception is expected.
+     * @param string|null  $one          The expected rounding to a scale of one, or null if an exception is expected.
+     * @param string|null  $zero         The expected rounding to a scale of zero, or null if an exception is expected.
+     */
+    #[DataProvider('providerRoundingMode')]
+    public function testRoundingMode(RoundingMode $roundingMode, string $number, ?string $two, ?string $one, ?string $zero): void
+    {
+        $number = BigDecimal::of($number);
+
+        $this->doTestRoundingMode($roundingMode, $number, '1', $two, $one, $zero);
+        $this->doTestRoundingMode($roundingMode, $number->negated(), '-1', $two, $one, $zero);
+    }
+
+    public static function providerRoundingMode(): array
+    {
+        return [
+            [RoundingMode::Unnecessary,  '3.501',    null,   null, null],
+            [RoundingMode::Up,           '3.501',  '3.51',  '3.6',  '4'],
+            [RoundingMode::Down,         '3.501',  '3.50',  '3.5',  '3'],
+            [RoundingMode::Ceiling,      '3.501',  '3.51',  '3.6',  '4'],
+            [RoundingMode::Floor,        '3.501',  '3.50',  '3.5',  '3'],
+            [RoundingMode::HalfUp,       '3.501',  '3.50',  '3.5',  '4'],
+            [RoundingMode::HalfDown,     '3.501',  '3.50',  '3.5',  '4'],
+            [RoundingMode::HalfCeiling,  '3.501',  '3.50',  '3.5',  '4'],
+            [RoundingMode::HalfFloor,    '3.501',  '3.50',  '3.5',  '4'],
+            [RoundingMode::HalfEven,     '3.501',  '3.50',  '3.5',  '4'],
+            [RoundingMode::HalfOdd,      '3.501',  '3.50',  '3.5',  '4'],
+
+            [RoundingMode::Unnecessary,  '3.500',  '3.50',  '3.5', null],
+            [RoundingMode::Up,           '3.500',  '3.50',  '3.5',  '4'],
+            [RoundingMode::Down,         '3.500',  '3.50',  '3.5',  '3'],
+            [RoundingMode::Ceiling,      '3.500',  '3.50',  '3.5',  '4'],
+            [RoundingMode::Floor,        '3.500',  '3.50',  '3.5',  '3'],
+            [RoundingMode::HalfUp,       '3.500',  '3.50',  '3.5',  '4'],
+            [RoundingMode::HalfDown,     '3.500',  '3.50',  '3.5',  '3'],
+            [RoundingMode::HalfCeiling,  '3.500',  '3.50',  '3.5',  '4'],
+            [RoundingMode::HalfFloor,    '3.500',  '3.50',  '3.5',  '3'],
+            [RoundingMode::HalfEven,     '3.500',  '3.50',  '3.5',  '4'],
+            [RoundingMode::HalfOdd,      '3.500',  '3.50',  '3.5',  '3'],
+
+            [RoundingMode::Unnecessary,  '3.499',    null,   null, null],
+            [RoundingMode::Up,           '3.499',  '3.50',  '3.5',  '4'],
+            [RoundingMode::Down,         '3.499',  '3.49',  '3.4',  '3'],
+            [RoundingMode::Ceiling,      '3.499',  '3.50',  '3.5',  '4'],
+            [RoundingMode::Floor,        '3.499',  '3.49',  '3.4',  '3'],
+            [RoundingMode::HalfUp,       '3.499',  '3.50',  '3.5',  '3'],
+            [RoundingMode::HalfDown,     '3.499',  '3.50',  '3.5',  '3'],
+            [RoundingMode::HalfCeiling,  '3.499',  '3.50',  '3.5',  '3'],
+            [RoundingMode::HalfFloor,    '3.499',  '3.50',  '3.5',  '3'],
+            [RoundingMode::HalfEven,     '3.499',  '3.50',  '3.5',  '3'],
+            [RoundingMode::HalfOdd,      '3.499',  '3.50',  '3.5',  '3'],
+
+            [RoundingMode::Unnecessary,  '3.001',    null,   null, null],
+            [RoundingMode::Up,           '3.001',  '3.01',  '3.1',  '4'],
+            [RoundingMode::Down,         '3.001',  '3.00',  '3.0',  '3'],
+            [RoundingMode::Ceiling,      '3.001',  '3.01',  '3.1',  '4'],
+            [RoundingMode::Floor,        '3.001',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfUp,       '3.001',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfDown,     '3.001',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfCeiling,  '3.001',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfFloor,    '3.001',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfEven,     '3.001',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfOdd,      '3.001',  '3.00',  '3.0',  '3'],
+
+            [RoundingMode::Unnecessary,  '3.000',  '3.00',  '3.0',  '3'],
+            [RoundingMode::Up,           '3.000',  '3.00',  '3.0',  '3'],
+            [RoundingMode::Down,         '3.000',  '3.00',  '3.0',  '3'],
+            [RoundingMode::Ceiling,      '3.000',  '3.00',  '3.0',  '3'],
+            [RoundingMode::Floor,        '3.000',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfUp,       '3.000',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfDown,     '3.000',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfCeiling,  '3.000',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfFloor,    '3.000',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfEven,     '3.000',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfOdd,      '3.000',  '3.00',  '3.0',  '3'],
+
+            [RoundingMode::Unnecessary,  '2.999',    null,   null, null],
+            [RoundingMode::Up,           '2.999',  '3.00',  '3.0',  '3'],
+            [RoundingMode::Down,         '2.999',  '2.99',  '2.9',  '2'],
+            [RoundingMode::Ceiling,      '2.999',  '3.00',  '3.0',  '3'],
+            [RoundingMode::Floor,        '2.999',  '2.99',  '2.9',  '2'],
+            [RoundingMode::HalfUp,       '2.999',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfDown,     '2.999',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfCeiling,  '2.999',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfFloor,    '2.999',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfEven,     '2.999',  '3.00',  '3.0',  '3'],
+            [RoundingMode::HalfOdd,      '2.999',  '3.00',  '3.0',  '3'],
+
+            [RoundingMode::Unnecessary,  '2.501',    null,   null, null],
+            [RoundingMode::Up,           '2.501',  '2.51',  '2.6',  '3'],
+            [RoundingMode::Down,         '2.501',  '2.50',  '2.5',  '2'],
+            [RoundingMode::Ceiling,      '2.501',  '2.51',  '2.6',  '3'],
+            [RoundingMode::Floor,        '2.501',  '2.50',  '2.5',  '2'],
+            [RoundingMode::HalfUp,       '2.501',  '2.50',  '2.5',  '3'],
+            [RoundingMode::HalfDown,     '2.501',  '2.50',  '2.5',  '3'],
+            [RoundingMode::HalfCeiling,  '2.501',  '2.50',  '2.5',  '3'],
+            [RoundingMode::HalfFloor,    '2.501',  '2.50',  '2.5',  '3'],
+            [RoundingMode::HalfEven,     '2.501',  '2.50',  '2.5',  '3'],
+            [RoundingMode::HalfOdd,      '2.501',  '2.50',  '2.5',  '3'],
+
+            [RoundingMode::Unnecessary,  '2.500',  '2.50',  '2.5', null],
+            [RoundingMode::Up,           '2.500',  '2.50',  '2.5',  '3'],
+            [RoundingMode::Down,         '2.500',  '2.50',  '2.5',  '2'],
+            [RoundingMode::Ceiling,      '2.500',  '2.50',  '2.5',  '3'],
+            [RoundingMode::Floor,        '2.500',  '2.50',  '2.5',  '2'],
+            [RoundingMode::HalfUp,       '2.500',  '2.50',  '2.5',  '3'],
+            [RoundingMode::HalfDown,     '2.500',  '2.50',  '2.5',  '2'],
+            [RoundingMode::HalfCeiling,  '2.500',  '2.50',  '2.5',  '3'],
+            [RoundingMode::HalfFloor,    '2.500',  '2.50',  '2.5',  '2'],
+            [RoundingMode::HalfEven,     '2.500',  '2.50',  '2.5',  '2'],
+            [RoundingMode::HalfOdd,      '2.500',  '2.50',  '2.5',  '3'],
+
+            [RoundingMode::Unnecessary,  '2.499',    null,   null, null],
+            [RoundingMode::Up,           '2.499',  '2.50',  '2.5',  '3'],
+            [RoundingMode::Down,         '2.499',  '2.49',  '2.4',  '2'],
+            [RoundingMode::Ceiling,      '2.499',  '2.50',  '2.5',  '3'],
+            [RoundingMode::Floor,        '2.499',  '2.49',  '2.4',  '2'],
+            [RoundingMode::HalfUp,       '2.499',  '2.50',  '2.5',  '2'],
+            [RoundingMode::HalfDown,     '2.499',  '2.50',  '2.5',  '2'],
+            [RoundingMode::HalfCeiling,  '2.499',  '2.50',  '2.5',  '2'],
+            [RoundingMode::HalfFloor,    '2.499',  '2.50',  '2.5',  '2'],
+            [RoundingMode::HalfEven,     '2.499',  '2.50',  '2.5',  '2'],
+            [RoundingMode::HalfOdd,      '2.499',  '2.50',  '2.5',  '2'],
+
+            [RoundingMode::Unnecessary,  '2.001',    null,   null, null],
+            [RoundingMode::Up,           '2.001',  '2.01',  '2.1',  '3'],
+            [RoundingMode::Down,         '2.001',  '2.00',  '2.0',  '2'],
+            [RoundingMode::Ceiling,      '2.001',  '2.01',  '2.1',  '3'],
+            [RoundingMode::Floor,        '2.001',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfUp,       '2.001',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfDown,     '2.001',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfCeiling,  '2.001',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfFloor,    '2.001',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfEven,     '2.001',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfOdd,      '2.001',  '2.00',  '2.0',  '2'],
+
+            [RoundingMode::Unnecessary,  '2.000',  '2.00',  '2.0',  '2'],
+            [RoundingMode::Up,           '2.000',  '2.00',  '2.0',  '2'],
+            [RoundingMode::Down,         '2.000',  '2.00',  '2.0',  '2'],
+            [RoundingMode::Ceiling,      '2.000',  '2.00',  '2.0',  '2'],
+            [RoundingMode::Floor,        '2.000',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfUp,       '2.000',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfDown,     '2.000',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfCeiling,  '2.000',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfFloor,    '2.000',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfEven,     '2.000',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfOdd,      '2.000',  '2.00',  '2.0',  '2'],
+
+            [RoundingMode::Unnecessary,  '1.999',    null,   null, null],
+            [RoundingMode::Up,           '1.999',  '2.00',  '2.0',  '2'],
+            [RoundingMode::Down,         '1.999',  '1.99',  '1.9',  '1'],
+            [RoundingMode::Ceiling,      '1.999',  '2.00',  '2.0',  '2'],
+            [RoundingMode::Floor,        '1.999',  '1.99',  '1.9',  '1'],
+            [RoundingMode::HalfUp,       '1.999',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfDown,     '1.999',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfCeiling,  '1.999',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfFloor,    '1.999',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfEven,     '1.999',  '2.00',  '2.0',  '2'],
+            [RoundingMode::HalfOdd,      '1.999',  '2.00',  '2.0',  '2'],
+
+            [RoundingMode::Unnecessary,  '1.501',    null,   null, null],
+            [RoundingMode::Up,           '1.501',  '1.51',  '1.6',  '2'],
+            [RoundingMode::Down,         '1.501',  '1.50',  '1.5',  '1'],
+            [RoundingMode::Ceiling,      '1.501',  '1.51',  '1.6',  '2'],
+            [RoundingMode::Floor,        '1.501',  '1.50',  '1.5',  '1'],
+            [RoundingMode::HalfUp,       '1.501',  '1.50',  '1.5',  '2'],
+            [RoundingMode::HalfDown,     '1.501',  '1.50',  '1.5',  '2'],
+            [RoundingMode::HalfCeiling,  '1.501',  '1.50',  '1.5',  '2'],
+            [RoundingMode::HalfFloor,    '1.501',  '1.50',  '1.5',  '2'],
+            [RoundingMode::HalfEven,     '1.501',  '1.50',  '1.5',  '2'],
+            [RoundingMode::HalfOdd,      '1.501',  '1.50',  '1.5',  '2'],
+
+            [RoundingMode::Unnecessary,  '1.500',  '1.50',  '1.5', null],
+            [RoundingMode::Up,           '1.500',  '1.50',  '1.5',  '2'],
+            [RoundingMode::Down,         '1.500',  '1.50',  '1.5',  '1'],
+            [RoundingMode::Ceiling,      '1.500',  '1.50',  '1.5',  '2'],
+            [RoundingMode::Floor,        '1.500',  '1.50',  '1.5',  '1'],
+            [RoundingMode::HalfUp,       '1.500',  '1.50',  '1.5',  '2'],
+            [RoundingMode::HalfDown,     '1.500',  '1.50',  '1.5',  '1'],
+            [RoundingMode::HalfCeiling,  '1.500',  '1.50',  '1.5',  '2'],
+            [RoundingMode::HalfFloor,    '1.500',  '1.50',  '1.5',  '1'],
+            [RoundingMode::HalfEven,     '1.500',  '1.50',  '1.5',  '2'],
+            [RoundingMode::HalfOdd,      '1.500',  '1.50',  '1.5',  '1'],
+
+            [RoundingMode::Unnecessary,  '1.499',    null,   null, null],
+            [RoundingMode::Up,           '1.499',  '1.50',  '1.5',  '2'],
+            [RoundingMode::Down,         '1.499',  '1.49',  '1.4',  '1'],
+            [RoundingMode::Ceiling,      '1.499',  '1.50',  '1.5',  '2'],
+            [RoundingMode::Floor,        '1.499',  '1.49',  '1.4',  '1'],
+            [RoundingMode::HalfUp,       '1.499',  '1.50',  '1.5',  '1'],
+            [RoundingMode::HalfDown,     '1.499',  '1.50',  '1.5',  '1'],
+            [RoundingMode::HalfCeiling,  '1.499',  '1.50',  '1.5',  '1'],
+            [RoundingMode::HalfFloor,    '1.499',  '1.50',  '1.5',  '1'],
+            [RoundingMode::HalfEven,     '1.499',  '1.50',  '1.5',  '1'],
+            [RoundingMode::HalfOdd,      '1.499',  '1.50',  '1.5',  '1'],
+
+            [RoundingMode::Unnecessary,  '1.001',    null,   null, null],
+            [RoundingMode::Up,           '1.001',  '1.01',  '1.1',  '2'],
+            [RoundingMode::Down,         '1.001',  '1.00',  '1.0',  '1'],
+            [RoundingMode::Ceiling,      '1.001',  '1.01',  '1.1',  '2'],
+            [RoundingMode::Floor,        '1.001',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfUp,       '1.001',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfDown,     '1.001',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfCeiling,  '1.001',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfFloor,    '1.001',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfEven,     '1.001',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfOdd,      '1.001',  '1.00',  '1.0',  '1'],
+
+            [RoundingMode::Unnecessary,  '1.000',  '1.00',  '1.0',  '1'],
+            [RoundingMode::Up,           '1.000',  '1.00',  '1.0',  '1'],
+            [RoundingMode::Down,         '1.000',  '1.00',  '1.0',  '1'],
+            [RoundingMode::Ceiling,      '1.000',  '1.00',  '1.0',  '1'],
+            [RoundingMode::Floor,        '1.000',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfUp,       '1.000',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfDown,     '1.000',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfCeiling,  '1.000',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfFloor,    '1.000',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfEven,     '1.000',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfOdd,      '1.000',  '1.00',  '1.0',  '1'],
+
+            [RoundingMode::Unnecessary,  '0.999',    null,   null, null],
+            [RoundingMode::Up,           '0.999',  '1.00',  '1.0',  '1'],
+            [RoundingMode::Down,         '0.999',  '0.99',  '0.9',  '0'],
+            [RoundingMode::Ceiling,      '0.999',  '1.00',  '1.0',  '1'],
+            [RoundingMode::Floor,        '0.999',  '0.99',  '0.9',  '0'],
+            [RoundingMode::HalfUp,       '0.999',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfDown,     '0.999',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfCeiling,  '0.999',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfFloor,    '0.999',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfEven,     '0.999',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfOdd,      '0.999',  '1.00',  '1.0',  '1'],
+
+            [RoundingMode::Unnecessary,  '0.501',    null,   null, null],
+            [RoundingMode::Up,           '0.501',  '0.51',  '0.6',  '1'],
+            [RoundingMode::Down,         '0.501',  '0.50',  '0.5',  '0'],
+            [RoundingMode::Ceiling,      '0.501',  '0.51',  '0.6',  '1'],
+            [RoundingMode::Floor,        '0.501',  '0.50',  '0.5',  '0'],
+            [RoundingMode::HalfUp,       '0.501',  '0.50',  '0.5',  '1'],
+            [RoundingMode::HalfDown,     '0.501',  '0.50',  '0.5',  '1'],
+            [RoundingMode::HalfCeiling,  '0.501',  '0.50',  '0.5',  '1'],
+            [RoundingMode::HalfFloor,    '0.501',  '0.50',  '0.5',  '1'],
+            [RoundingMode::HalfEven,     '0.501',  '0.50',  '0.5',  '1'],
+            [RoundingMode::HalfOdd,      '0.501',  '0.50',  '0.5',  '1'],
+
+            [RoundingMode::Unnecessary,  '0.500',  '0.50',  '0.5', null],
+            [RoundingMode::Up,           '0.500',  '0.50',  '0.5',  '1'],
+            [RoundingMode::Down,         '0.500',  '0.50',  '0.5',  '0'],
+            [RoundingMode::Ceiling,      '0.500',  '0.50',  '0.5',  '1'],
+            [RoundingMode::Floor,        '0.500',  '0.50',  '0.5',  '0'],
+            [RoundingMode::HalfUp,       '0.500',  '0.50',  '0.5',  '1'],
+            [RoundingMode::HalfDown,     '0.500',  '0.50',  '0.5',  '0'],
+            [RoundingMode::HalfCeiling,  '0.500',  '0.50',  '0.5',  '1'],
+            [RoundingMode::HalfFloor,    '0.500',  '0.50',  '0.5',  '0'],
+            [RoundingMode::HalfEven,     '0.500',  '0.50',  '0.5',  '0'],
+            [RoundingMode::HalfOdd,      '0.500',  '0.50',  '0.5',  '1'],
+
+            [RoundingMode::Unnecessary,  '0.499',    null,   null, null],
+            [RoundingMode::Up,           '0.499',  '0.50',  '0.5',  '1'],
+            [RoundingMode::Down,         '0.499',  '0.49',  '0.4',  '0'],
+            [RoundingMode::Ceiling,      '0.499',  '0.50',  '0.5',  '1'],
+            [RoundingMode::Floor,        '0.499',  '0.49',  '0.4',  '0'],
+            [RoundingMode::HalfUp,       '0.499',  '0.50',  '0.5',  '0'],
+            [RoundingMode::HalfDown,     '0.499',  '0.50',  '0.5',  '0'],
+            [RoundingMode::HalfCeiling,  '0.499',  '0.50',  '0.5',  '0'],
+            [RoundingMode::HalfFloor,    '0.499',  '0.50',  '0.5',  '0'],
+            [RoundingMode::HalfEven,     '0.499',  '0.50',  '0.5',  '0'],
+            [RoundingMode::HalfOdd,      '0.499',  '0.50',  '0.5',  '0'],
+
+            [RoundingMode::Unnecessary,  '0.001',    null,   null, null],
+            [RoundingMode::Up,           '0.001',  '0.01',  '0.1',  '1'],
+            [RoundingMode::Down,         '0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::Ceiling,      '0.001',  '0.01',  '0.1',  '1'],
+            [RoundingMode::Floor,        '0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfUp,       '0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfDown,     '0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfCeiling,  '0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfFloor,    '0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfEven,     '0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfOdd,      '0.001',  '0.00',  '0.0',  '0'],
+
+            [RoundingMode::Unnecessary,  '0.000',  '0.00',  '0.0',  '0'],
+            [RoundingMode::Up,           '0.000',  '0.00',  '0.0',  '0'],
+            [RoundingMode::Down,         '0.000',  '0.00',  '0.0',  '0'],
+            [RoundingMode::Ceiling,      '0.000',  '0.00',  '0.0',  '0'],
+            [RoundingMode::Floor,        '0.000',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfUp,       '0.000',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfDown,     '0.000',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfCeiling,  '0.000',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfFloor,    '0.000',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfEven,     '0.000',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfOdd,      '0.000',  '0.00',  '0.0',  '0'],
+
+            [RoundingMode::Unnecessary, '-0.001',    null,   null, null],
+            [RoundingMode::Up,          '-0.001', '-0.01', '-0.1', '-1'],
+            [RoundingMode::Down,        '-0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::Ceiling,     '-0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::Floor,       '-0.001', '-0.01', '-0.1', '-1'],
+            [RoundingMode::HalfUp,      '-0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfDown,    '-0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfCeiling, '-0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfFloor,   '-0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfEven,    '-0.001',  '0.00',  '0.0',  '0'],
+            [RoundingMode::HalfOdd,     '-0.001',  '0.00',  '0.0',  '0'],
+
+            [RoundingMode::Unnecessary, '-0.499',    null,   null, null],
+            [RoundingMode::Up,          '-0.499', '-0.50', '-0.5', '-1'],
+            [RoundingMode::Down,        '-0.499', '-0.49', '-0.4',  '0'],
+            [RoundingMode::Ceiling,     '-0.499', '-0.49', '-0.4',  '0'],
+            [RoundingMode::Floor,       '-0.499', '-0.50', '-0.5', '-1'],
+            [RoundingMode::HalfUp,      '-0.499', '-0.50', '-0.5',  '0'],
+            [RoundingMode::HalfDown,    '-0.499', '-0.50', '-0.5',  '0'],
+            [RoundingMode::HalfCeiling, '-0.499', '-0.50', '-0.5',  '0'],
+            [RoundingMode::HalfFloor,   '-0.499', '-0.50', '-0.5',  '0'],
+            [RoundingMode::HalfEven,    '-0.499', '-0.50', '-0.5',  '0'],
+            [RoundingMode::HalfOdd,     '-0.499', '-0.50', '-0.5',  '0'],
+
+            [RoundingMode::Unnecessary, '-0.500', '-0.50', '-0.5', null],
+            [RoundingMode::Up,          '-0.500', '-0.50', '-0.5', '-1'],
+            [RoundingMode::Down,        '-0.500', '-0.50', '-0.5',  '0'],
+            [RoundingMode::Ceiling,     '-0.500', '-0.50', '-0.5',  '0'],
+            [RoundingMode::Floor,       '-0.500', '-0.50', '-0.5', '-1'],
+            [RoundingMode::HalfUp,      '-0.500', '-0.50', '-0.5', '-1'],
+            [RoundingMode::HalfDown,    '-0.500', '-0.50', '-0.5',  '0'],
+            [RoundingMode::HalfCeiling, '-0.500', '-0.50', '-0.5',  '0'],
+            [RoundingMode::HalfFloor,   '-0.500', '-0.50', '-0.5', '-1'],
+            [RoundingMode::HalfEven,    '-0.500', '-0.50', '-0.5',  '0'],
+            [RoundingMode::HalfOdd,     '-0.500', '-0.50', '-0.5', '-1'],
+
+            [RoundingMode::Unnecessary, '-0.501',    null,   null, null],
+            [RoundingMode::Up,          '-0.501', '-0.51', '-0.6', '-1'],
+            [RoundingMode::Down,        '-0.501', '-0.50', '-0.5',  '0'],
+            [RoundingMode::Ceiling,     '-0.501', '-0.50', '-0.5',  '0'],
+            [RoundingMode::Floor,       '-0.501', '-0.51', '-0.6', '-1'],
+            [RoundingMode::HalfUp,      '-0.501', '-0.50', '-0.5', '-1'],
+            [RoundingMode::HalfDown,    '-0.501', '-0.50', '-0.5', '-1'],
+            [RoundingMode::HalfCeiling, '-0.501', '-0.50', '-0.5', '-1'],
+            [RoundingMode::HalfFloor,   '-0.501', '-0.50', '-0.5', '-1'],
+            [RoundingMode::HalfEven,    '-0.501', '-0.50', '-0.5', '-1'],
+            [RoundingMode::HalfOdd,     '-0.501', '-0.50', '-0.5', '-1'],
+
+            [RoundingMode::Unnecessary, '-0.999',    null,   null, null],
+            [RoundingMode::Up,          '-0.999', '-1.00', '-1.0', '-1'],
+            [RoundingMode::Down,        '-0.999', '-0.99', '-0.9',  '0'],
+            [RoundingMode::Ceiling,     '-0.999', '-0.99', '-0.9',  '0'],
+            [RoundingMode::Floor,       '-0.999', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfUp,      '-0.999', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfDown,    '-0.999', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfCeiling, '-0.999', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfFloor,   '-0.999', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfEven,    '-0.999', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfOdd,     '-0.999', '-1.00', '-1.0', '-1'],
+
+            [RoundingMode::Unnecessary, '-1.000', '-1.00', '-1.0', '-1'],
+            [RoundingMode::Up,          '-1.000', '-1.00', '-1.0', '-1'],
+            [RoundingMode::Down,        '-1.000', '-1.00', '-1.0', '-1'],
+            [RoundingMode::Ceiling,     '-1.000', '-1.00', '-1.0', '-1'],
+            [RoundingMode::Floor,       '-1.000', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfUp,      '-1.000', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfDown,    '-1.000', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfCeiling, '-1.000', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfFloor,   '-1.000', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfEven,    '-1.000', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfOdd,     '-1.000', '-1.00', '-1.0', '-1'],
+
+            [RoundingMode::Unnecessary, '-1.001',    null,   null, null],
+            [RoundingMode::Up,          '-1.001', '-1.01', '-1.1', '-2'],
+            [RoundingMode::Down,        '-1.001', '-1.00', '-1.0', '-1'],
+            [RoundingMode::Ceiling,     '-1.001', '-1.00', '-1.0', '-1'],
+            [RoundingMode::Floor,       '-1.001', '-1.01', '-1.1', '-2'],
+            [RoundingMode::HalfUp,      '-1.001', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfDown,    '-1.001', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfCeiling, '-1.001', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfFloor,   '-1.001', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfEven,    '-1.001', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfOdd,     '-1.001', '-1.00', '-1.0', '-1'],
+
+            [RoundingMode::Unnecessary, '-1.499',    null,   null, null],
+            [RoundingMode::Up,          '-1.499', '-1.50', '-1.5', '-2'],
+            [RoundingMode::Down,        '-1.499', '-1.49', '-1.4', '-1'],
+            [RoundingMode::Ceiling,     '-1.499', '-1.49', '-1.4', '-1'],
+            [RoundingMode::Floor,       '-1.499', '-1.50', '-1.5', '-2'],
+            [RoundingMode::HalfUp,      '-1.499', '-1.50', '-1.5', '-1'],
+            [RoundingMode::HalfDown,    '-1.499', '-1.50', '-1.5', '-1'],
+            [RoundingMode::HalfCeiling, '-1.499', '-1.50', '-1.5', '-1'],
+            [RoundingMode::HalfFloor,   '-1.499', '-1.50', '-1.5', '-1'],
+            [RoundingMode::HalfEven,    '-1.499', '-1.50', '-1.5', '-1'],
+            [RoundingMode::HalfOdd,     '-1.499', '-1.50', '-1.5', '-1'],
+
+            [RoundingMode::Unnecessary, '-1.500', '-1.50', '-1.5', null],
+            [RoundingMode::Up,          '-1.500', '-1.50', '-1.5', '-2'],
+            [RoundingMode::Down,        '-1.500', '-1.50', '-1.5', '-1'],
+            [RoundingMode::Ceiling,     '-1.500', '-1.50', '-1.5', '-1'],
+            [RoundingMode::Floor,       '-1.500', '-1.50', '-1.5', '-2'],
+            [RoundingMode::HalfUp,      '-1.500', '-1.50', '-1.5', '-2'],
+            [RoundingMode::HalfDown,    '-1.500', '-1.50', '-1.5', '-1'],
+            [RoundingMode::HalfCeiling, '-1.500', '-1.50', '-1.5', '-1'],
+            [RoundingMode::HalfFloor,   '-1.500', '-1.50', '-1.5', '-2'],
+            [RoundingMode::HalfEven,    '-1.500', '-1.50', '-1.5', '-2'],
+            [RoundingMode::HalfOdd,     '-1.500', '-1.50', '-1.5', '-1'],
+
+            [RoundingMode::Unnecessary, '-1.501',    null,   null, null],
+            [RoundingMode::Up,          '-1.501', '-1.51', '-1.6', '-2'],
+            [RoundingMode::Down,        '-1.501', '-1.50', '-1.5', '-1'],
+            [RoundingMode::Ceiling,     '-1.501', '-1.50', '-1.5', '-1'],
+            [RoundingMode::Floor,       '-1.501', '-1.51', '-1.6', '-2'],
+            [RoundingMode::HalfUp,      '-1.501', '-1.50', '-1.5', '-2'],
+            [RoundingMode::HalfDown,    '-1.501', '-1.50', '-1.5', '-2'],
+            [RoundingMode::HalfCeiling, '-1.501', '-1.50', '-1.5', '-2'],
+            [RoundingMode::HalfFloor,   '-1.501', '-1.50', '-1.5', '-2'],
+            [RoundingMode::HalfEven,    '-1.501', '-1.50', '-1.5', '-2'],
+            [RoundingMode::HalfOdd,     '-1.501', '-1.50', '-1.5', '-2'],
+
+            [RoundingMode::Unnecessary, '-1.999',    null,   null, null],
+            [RoundingMode::Up,          '-1.999', '-2.00', '-2.0', '-2'],
+            [RoundingMode::Down,        '-1.999', '-1.99', '-1.9', '-1'],
+            [RoundingMode::Ceiling,     '-1.999', '-1.99', '-1.9', '-1'],
+            [RoundingMode::Floor,       '-1.999', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfUp,      '-1.999', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfDown,    '-1.999', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfCeiling, '-1.999', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfFloor,   '-1.999', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfEven,    '-1.999', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfOdd,     '-1.999', '-2.00', '-2.0', '-2'],
+
+            [RoundingMode::Unnecessary, '-2.000', '-2.00', '-2.0', '-2'],
+            [RoundingMode::Up,          '-2.000', '-2.00', '-2.0', '-2'],
+            [RoundingMode::Down,        '-2.000', '-2.00', '-2.0', '-2'],
+            [RoundingMode::Ceiling,     '-2.000', '-2.00', '-2.0', '-2'],
+            [RoundingMode::Floor,       '-2.000', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfUp,      '-2.000', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfDown,    '-2.000', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfCeiling, '-2.000', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfFloor,   '-2.000', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfEven,    '-2.000', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfOdd,     '-2.000', '-2.00', '-2.0', '-2'],
+
+            [RoundingMode::Unnecessary, '-2.001',    null,   null, null],
+            [RoundingMode::Up,          '-2.001', '-2.01', '-2.1', '-3'],
+            [RoundingMode::Down,        '-2.001', '-2.00', '-2.0', '-2'],
+            [RoundingMode::Ceiling,     '-2.001', '-2.00', '-2.0', '-2'],
+            [RoundingMode::Floor,       '-2.001', '-2.01', '-2.1', '-3'],
+            [RoundingMode::HalfUp,      '-2.001', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfDown,    '-2.001', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfCeiling, '-2.001', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfFloor,   '-2.001', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfEven,    '-2.001', '-2.00', '-2.0', '-2'],
+            [RoundingMode::HalfOdd,     '-2.001', '-2.00', '-2.0', '-2'],
+
+            [RoundingMode::Unnecessary, '-2.499',    null,   null, null],
+            [RoundingMode::Up,          '-2.499', '-2.50', '-2.5', '-3'],
+            [RoundingMode::Down,        '-2.499', '-2.49', '-2.4', '-2'],
+            [RoundingMode::Ceiling,     '-2.499', '-2.49', '-2.4', '-2'],
+            [RoundingMode::Floor,       '-2.499', '-2.50', '-2.5', '-3'],
+            [RoundingMode::HalfUp,      '-2.499', '-2.50', '-2.5', '-2'],
+            [RoundingMode::HalfDown,    '-2.499', '-2.50', '-2.5', '-2'],
+            [RoundingMode::HalfCeiling, '-2.499', '-2.50', '-2.5', '-2'],
+            [RoundingMode::HalfFloor,   '-2.499', '-2.50', '-2.5', '-2'],
+            [RoundingMode::HalfEven,    '-2.499', '-2.50', '-2.5', '-2'],
+            [RoundingMode::HalfOdd,     '-2.499', '-2.50', '-2.5', '-2'],
+
+            [RoundingMode::Unnecessary, '-2.500', '-2.50', '-2.5', null],
+            [RoundingMode::Up,          '-2.500', '-2.50', '-2.5', '-3'],
+            [RoundingMode::Down,        '-2.500', '-2.50', '-2.5', '-2'],
+            [RoundingMode::Ceiling,     '-2.500', '-2.50', '-2.5', '-2'],
+            [RoundingMode::Floor,       '-2.500', '-2.50', '-2.5', '-3'],
+            [RoundingMode::HalfUp,      '-2.500', '-2.50', '-2.5', '-3'],
+            [RoundingMode::HalfDown,    '-2.500', '-2.50', '-2.5', '-2'],
+            [RoundingMode::HalfCeiling, '-2.500', '-2.50', '-2.5', '-2'],
+            [RoundingMode::HalfFloor,   '-2.500', '-2.50', '-2.5', '-3'],
+            [RoundingMode::HalfEven,    '-2.500', '-2.50', '-2.5', '-2'],
+            [RoundingMode::HalfOdd,     '-2.500', '-2.50', '-2.5', '-3'],
+
+            [RoundingMode::Unnecessary, '-2.501',    null,   null, null],
+            [RoundingMode::Up,          '-2.501', '-2.51', '-2.6', '-3'],
+            [RoundingMode::Down,        '-2.501', '-2.50', '-2.5', '-2'],
+            [RoundingMode::Ceiling,     '-2.501', '-2.50', '-2.5', '-2'],
+            [RoundingMode::Floor,       '-2.501', '-2.51', '-2.6', '-3'],
+            [RoundingMode::HalfUp,      '-2.501', '-2.50', '-2.5', '-3'],
+            [RoundingMode::HalfDown,    '-2.501', '-2.50', '-2.5', '-3'],
+            [RoundingMode::HalfCeiling, '-2.501', '-2.50', '-2.5', '-3'],
+            [RoundingMode::HalfFloor,   '-2.501', '-2.50', '-2.5', '-3'],
+            [RoundingMode::HalfEven,    '-2.501', '-2.50', '-2.5', '-3'],
+            [RoundingMode::HalfOdd,     '-2.501', '-2.50', '-2.5', '-3'],
+
+            [RoundingMode::Unnecessary, '-2.999',    null,   null, null],
+            [RoundingMode::Up,          '-2.999', '-3.00', '-3.0', '-3'],
+            [RoundingMode::Down,        '-2.999', '-2.99', '-2.9', '-2'],
+            [RoundingMode::Ceiling,     '-2.999', '-2.99', '-2.9', '-2'],
+            [RoundingMode::Floor,       '-2.999', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfUp,      '-2.999', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfDown,    '-2.999', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfCeiling, '-2.999', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfFloor,   '-2.999', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfEven,    '-2.999', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfOdd,     '-2.999', '-3.00', '-3.0', '-3'],
+
+            [RoundingMode::Unnecessary, '-3.000', '-3.00', '-3.0', '-3'],
+            [RoundingMode::Up,          '-3.000', '-3.00', '-3.0', '-3'],
+            [RoundingMode::Down,        '-3.000', '-3.00', '-3.0', '-3'],
+            [RoundingMode::Ceiling,     '-3.000', '-3.00', '-3.0', '-3'],
+            [RoundingMode::Floor,       '-3.000', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfUp,      '-3.000', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfDown,    '-3.000', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfCeiling, '-3.000', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfFloor,   '-3.000', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfEven,    '-3.000', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfOdd,     '-3.000', '-3.00', '-3.0', '-3'],
+
+            [RoundingMode::Unnecessary, '-3.001',    null,   null, null],
+            [RoundingMode::Up,          '-3.001', '-3.01', '-3.1', '-4'],
+            [RoundingMode::Down,        '-3.001', '-3.00', '-3.0', '-3'],
+            [RoundingMode::Ceiling,     '-3.001', '-3.00', '-3.0', '-3'],
+            [RoundingMode::Floor,       '-3.001', '-3.01', '-3.1', '-4'],
+            [RoundingMode::HalfUp,      '-3.001', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfDown,    '-3.001', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfCeiling, '-3.001', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfFloor,   '-3.001', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfEven,    '-3.001', '-3.00', '-3.0', '-3'],
+            [RoundingMode::HalfOdd,     '-3.001', '-3.00', '-3.0', '-3'],
+
+            [RoundingMode::Unnecessary, '-3.499',    null,   null, null],
+            [RoundingMode::Up,          '-3.499', '-3.50', '-3.5', '-4'],
+            [RoundingMode::Down,        '-3.499', '-3.49', '-3.4', '-3'],
+            [RoundingMode::Ceiling,     '-3.499', '-3.49', '-3.4', '-3'],
+            [RoundingMode::Floor,       '-3.499', '-3.50', '-3.5', '-4'],
+            [RoundingMode::HalfUp,      '-3.499', '-3.50', '-3.5', '-3'],
+            [RoundingMode::HalfDown,    '-3.499', '-3.50', '-3.5', '-3'],
+            [RoundingMode::HalfCeiling, '-3.499', '-3.50', '-3.5', '-3'],
+            [RoundingMode::HalfFloor,   '-3.499', '-3.50', '-3.5', '-3'],
+            [RoundingMode::HalfEven,    '-3.499', '-3.50', '-3.5', '-3'],
+            [RoundingMode::HalfOdd,     '-3.499', '-3.50', '-3.5', '-3'],
+
+            [RoundingMode::Unnecessary, '-3.500', '-3.50', '-3.5', null],
+            [RoundingMode::Up,          '-3.500', '-3.50', '-3.5', '-4'],
+            [RoundingMode::Down,        '-3.500', '-3.50', '-3.5', '-3'],
+            [RoundingMode::Ceiling,     '-3.500', '-3.50', '-3.5', '-3'],
+            [RoundingMode::Floor,       '-3.500', '-3.50', '-3.5', '-4'],
+            [RoundingMode::HalfUp,      '-3.500', '-3.50', '-3.5', '-4'],
+            [RoundingMode::HalfDown,    '-3.500', '-3.50', '-3.5', '-3'],
+            [RoundingMode::HalfCeiling, '-3.500', '-3.50', '-3.5', '-3'],
+            [RoundingMode::HalfFloor,   '-3.500', '-3.50', '-3.5', '-4'],
+            [RoundingMode::HalfEven,    '-3.500', '-3.50', '-3.5', '-4'],
+            [RoundingMode::HalfOdd,     '-3.500', '-3.50', '-3.5', '-3'],
+
+            [RoundingMode::Unnecessary, '-3.501',    null,   null, null],
+            [RoundingMode::Up,          '-3.501', '-3.51', '-3.6', '-4'],
+            [RoundingMode::Down,        '-3.501', '-3.50', '-3.5', '-3'],
+            [RoundingMode::Ceiling,     '-3.501', '-3.50', '-3.5', '-3'],
+            [RoundingMode::Floor,       '-3.501', '-3.51', '-3.6', '-4'],
+            [RoundingMode::HalfUp,      '-3.501', '-3.50', '-3.5', '-4'],
+            [RoundingMode::HalfDown,    '-3.501', '-3.50', '-3.5', '-4'],
+            [RoundingMode::HalfCeiling, '-3.501', '-3.50', '-3.5', '-4'],
+            [RoundingMode::HalfFloor,   '-3.501', '-3.50', '-3.5', '-4'],
+            [RoundingMode::HalfEven,    '-3.501', '-3.50', '-3.5', '-4'],
+            [RoundingMode::HalfOdd,     '-3.501', '-3.50', '-3.5', '-4'],
+
+            [RoundingMode::Unnecessary,  '0.045',    null,   null, null],
+            [RoundingMode::Up,           '0.045',  '0.05',  '0.1',  '1'],
+            [RoundingMode::Down,         '0.045',  '0.04',  '0.0',  '0'],
+            [RoundingMode::Ceiling,      '0.045',  '0.05',  '0.1',  '1'],
+            [RoundingMode::Floor,        '0.045',  '0.04',  '0.0',  '0'],
+            [RoundingMode::HalfUp,       '0.045',  '0.05',  '0.0',  '0'],
+            [RoundingMode::HalfDown,     '0.045',  '0.04',  '0.0',  '0'],
+            [RoundingMode::HalfCeiling,  '0.045',  '0.05',  '0.0',  '0'],
+            [RoundingMode::HalfFloor,    '0.045',  '0.04',  '0.0',  '0'],
+            [RoundingMode::HalfEven,     '0.045',  '0.04',  '0.0',  '0'],
+            [RoundingMode::HalfOdd,      '0.045',  '0.05',  '0.0',  '0'],
+
+            [RoundingMode::Unnecessary,  '0.055',    null,   null, null],
+            [RoundingMode::Up,           '0.055',  '0.06',  '0.1',  '1'],
+            [RoundingMode::Down,         '0.055',  '0.05',  '0.0',  '0'],
+            [RoundingMode::Ceiling,      '0.055',  '0.06',  '0.1',  '1'],
+            [RoundingMode::Floor,        '0.055',  '0.05',  '0.0',  '0'],
+            [RoundingMode::HalfUp,       '0.055',  '0.06',  '0.1',  '0'],
+            [RoundingMode::HalfDown,     '0.055',  '0.05',  '0.1',  '0'],
+            [RoundingMode::HalfCeiling,  '0.055',  '0.06',  '0.1',  '0'],
+            [RoundingMode::HalfFloor,    '0.055',  '0.05',  '0.1',  '0'],
+            [RoundingMode::HalfEven,     '0.055',  '0.06',  '0.1',  '0'],
+            [RoundingMode::HalfOdd,      '0.055',  '0.05',  '0.1',  '0'],
+
+            [RoundingMode::Unnecessary,  '0.995',    null,   null, null],
+            [RoundingMode::Up,           '0.995',  '1.00',  '1.0',  '1'],
+            [RoundingMode::Down,         '0.995',  '0.99',  '0.9',  '0'],
+            [RoundingMode::Ceiling,      '0.995',  '1.00',  '1.0',  '1'],
+            [RoundingMode::Floor,        '0.995',  '0.99',  '0.9',  '0'],
+            [RoundingMode::HalfUp,       '0.995',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfDown,     '0.995',  '0.99',  '1.0',  '1'],
+            [RoundingMode::HalfCeiling,  '0.995',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfFloor,    '0.995',  '0.99',  '1.0',  '1'],
+            [RoundingMode::HalfEven,     '0.995',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfOdd,      '0.995',  '0.99',  '1.0',  '1'],
+
+            [RoundingMode::Unnecessary,  '1.005',    null,   null, null],
+            [RoundingMode::Up,           '1.005',  '1.01',  '1.1',  '2'],
+            [RoundingMode::Down,         '1.005',  '1.00',  '1.0',  '1'],
+            [RoundingMode::Ceiling,      '1.005',  '1.01',  '1.1',  '2'],
+            [RoundingMode::Floor,        '1.005',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfUp,       '1.005',  '1.01',  '1.0',  '1'],
+            [RoundingMode::HalfDown,     '1.005',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfCeiling,  '1.005',  '1.01',  '1.0',  '1'],
+            [RoundingMode::HalfFloor,    '1.005',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfEven,     '1.005',  '1.00',  '1.0',  '1'],
+            [RoundingMode::HalfOdd,      '1.005',  '1.01',  '1.0',  '1'],
+
+            [RoundingMode::Unnecessary,  '2.450',  '2.45',   null, null],
+            [RoundingMode::Up,           '2.450',  '2.45',  '2.5',  '3'],
+            [RoundingMode::Down,         '2.450',  '2.45',  '2.4',  '2'],
+            [RoundingMode::Ceiling,      '2.450',  '2.45',  '2.5',  '3'],
+            [RoundingMode::Floor,        '2.450',  '2.45',  '2.4',  '2'],
+            [RoundingMode::HalfUp,       '2.450',  '2.45',  '2.5',  '2'],
+            [RoundingMode::HalfDown,     '2.450',  '2.45',  '2.4',  '2'],
+            [RoundingMode::HalfCeiling,  '2.450',  '2.45',  '2.5',  '2'],
+            [RoundingMode::HalfFloor,    '2.450',  '2.45',  '2.4',  '2'],
+            [RoundingMode::HalfEven,     '2.450',  '2.45',  '2.4',  '2'],
+            [RoundingMode::HalfOdd,      '2.450',  '2.45',  '2.5',  '2'],
+
+            [RoundingMode::Unnecessary,  '2.550',  '2.55',   null, null],
+            [RoundingMode::Up,           '2.550',  '2.55',  '2.6',  '3'],
+            [RoundingMode::Down,         '2.550',  '2.55',  '2.5',  '2'],
+            [RoundingMode::Ceiling,      '2.550',  '2.55',  '2.6',  '3'],
+            [RoundingMode::Floor,        '2.550',  '2.55',  '2.5',  '2'],
+            [RoundingMode::HalfUp,       '2.550',  '2.55',  '2.6',  '3'],
+            [RoundingMode::HalfDown,     '2.550',  '2.55',  '2.5',  '3'],
+            [RoundingMode::HalfCeiling,  '2.550',  '2.55',  '2.6',  '3'],
+            [RoundingMode::HalfFloor,    '2.550',  '2.55',  '2.5',  '3'],
+            [RoundingMode::HalfEven,     '2.550',  '2.55',  '2.6',  '3'],
+            [RoundingMode::HalfOdd,      '2.550',  '2.55',  '2.5',  '3'],
+
+            [RoundingMode::Unnecessary, '1000000000000000000000000000.005', null, null, null],
+            [RoundingMode::Up,          '1000000000000000000000000000.005', '1000000000000000000000000000.01', '1000000000000000000000000000.1', '1000000000000000000000000001'],
+            [RoundingMode::Down,        '1000000000000000000000000000.005', '1000000000000000000000000000.00', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::Ceiling,     '1000000000000000000000000000.005', '1000000000000000000000000000.01', '1000000000000000000000000000.1', '1000000000000000000000000001'],
+            [RoundingMode::Floor,       '1000000000000000000000000000.005', '1000000000000000000000000000.00', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::HalfUp,      '1000000000000000000000000000.005', '1000000000000000000000000000.01', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::HalfDown,    '1000000000000000000000000000.005', '1000000000000000000000000000.00', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::HalfCeiling, '1000000000000000000000000000.005', '1000000000000000000000000000.01', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::HalfFloor,   '1000000000000000000000000000.005', '1000000000000000000000000000.00', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::HalfEven,    '1000000000000000000000000000.005', '1000000000000000000000000000.00', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::HalfOdd,     '1000000000000000000000000000.005', '1000000000000000000000000000.01', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+
+            [RoundingMode::Unnecessary, '1000000000000000000000000000.015', null, null, null],
+            [RoundingMode::Up,          '1000000000000000000000000000.015', '1000000000000000000000000000.02', '1000000000000000000000000000.1', '1000000000000000000000000001'],
+            [RoundingMode::Down,        '1000000000000000000000000000.015', '1000000000000000000000000000.01', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::Ceiling,     '1000000000000000000000000000.015', '1000000000000000000000000000.02', '1000000000000000000000000000.1', '1000000000000000000000000001'],
+            [RoundingMode::Floor,       '1000000000000000000000000000.015', '1000000000000000000000000000.01', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::HalfUp,      '1000000000000000000000000000.015', '1000000000000000000000000000.02', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::HalfDown,    '1000000000000000000000000000.015', '1000000000000000000000000000.01', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::HalfCeiling, '1000000000000000000000000000.015', '1000000000000000000000000000.02', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::HalfFloor,   '1000000000000000000000000000.015', '1000000000000000000000000000.01', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::HalfEven,    '1000000000000000000000000000.015', '1000000000000000000000000000.02', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+            [RoundingMode::HalfOdd,     '1000000000000000000000000000.015', '1000000000000000000000000000.01', '1000000000000000000000000000.0', '1000000000000000000000000000'],
+
+            [RoundingMode::Unnecessary, '-0.045',    null,   null, null],
+            [RoundingMode::Up,          '-0.045', '-0.05', '-0.1', '-1'],
+            [RoundingMode::Down,        '-0.045', '-0.04',  '0.0',  '0'],
+            [RoundingMode::Ceiling,     '-0.045', '-0.04',  '0.0',  '0'],
+            [RoundingMode::Floor,       '-0.045', '-0.05', '-0.1', '-1'],
+            [RoundingMode::HalfUp,      '-0.045', '-0.05',  '0.0',  '0'],
+            [RoundingMode::HalfDown,    '-0.045', '-0.04',  '0.0',  '0'],
+            [RoundingMode::HalfCeiling, '-0.045', '-0.04',  '0.0',  '0'],
+            [RoundingMode::HalfFloor,   '-0.045', '-0.05',  '0.0',  '0'],
+            [RoundingMode::HalfEven,    '-0.045', '-0.04',  '0.0',  '0'],
+            [RoundingMode::HalfOdd,     '-0.045', '-0.05',  '0.0',  '0'],
+
+            [RoundingMode::Unnecessary, '-0.055',    null,   null, null],
+            [RoundingMode::Up,          '-0.055', '-0.06', '-0.1', '-1'],
+            [RoundingMode::Down,        '-0.055', '-0.05',  '0.0',  '0'],
+            [RoundingMode::Ceiling,     '-0.055', '-0.05',  '0.0',  '0'],
+            [RoundingMode::Floor,       '-0.055', '-0.06', '-0.1', '-1'],
+            [RoundingMode::HalfUp,      '-0.055', '-0.06', '-0.1',  '0'],
+            [RoundingMode::HalfDown,    '-0.055', '-0.05', '-0.1',  '0'],
+            [RoundingMode::HalfCeiling, '-0.055', '-0.05', '-0.1',  '0'],
+            [RoundingMode::HalfFloor,   '-0.055', '-0.06', '-0.1',  '0'],
+            [RoundingMode::HalfEven,    '-0.055', '-0.06', '-0.1',  '0'],
+            [RoundingMode::HalfOdd,     '-0.055', '-0.05', '-0.1',  '0'],
+
+            [RoundingMode::Unnecessary, '-0.995',    null,   null, null],
+            [RoundingMode::Up,          '-0.995', '-1.00', '-1.0', '-1'],
+            [RoundingMode::Down,        '-0.995', '-0.99', '-0.9',  '0'],
+            [RoundingMode::Ceiling,     '-0.995', '-0.99', '-0.9',  '0'],
+            [RoundingMode::Floor,       '-0.995', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfUp,      '-0.995', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfDown,    '-0.995', '-0.99', '-1.0', '-1'],
+            [RoundingMode::HalfCeiling, '-0.995', '-0.99', '-1.0', '-1'],
+            [RoundingMode::HalfFloor,   '-0.995', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfEven,    '-0.995', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfOdd,     '-0.995', '-0.99', '-1.0', '-1'],
+
+            [RoundingMode::Unnecessary, '-1.005',    null,   null, null],
+            [RoundingMode::Up,          '-1.005', '-1.01', '-1.1', '-2'],
+            [RoundingMode::Down,        '-1.005', '-1.00', '-1.0', '-1'],
+            [RoundingMode::Ceiling,     '-1.005', '-1.00', '-1.0', '-1'],
+            [RoundingMode::Floor,       '-1.005', '-1.01', '-1.1', '-2'],
+            [RoundingMode::HalfUp,      '-1.005', '-1.01', '-1.0', '-1'],
+            [RoundingMode::HalfDown,    '-1.005', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfCeiling, '-1.005', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfFloor,   '-1.005', '-1.01', '-1.0', '-1'],
+            [RoundingMode::HalfEven,    '-1.005', '-1.00', '-1.0', '-1'],
+            [RoundingMode::HalfOdd,     '-1.005', '-1.01', '-1.0', '-1'],
+
+            [RoundingMode::Unnecessary, '-2.450', '-2.45',   null, null],
+            [RoundingMode::Up,          '-2.450', '-2.45', '-2.5', '-3'],
+            [RoundingMode::Down,        '-2.450', '-2.45', '-2.4', '-2'],
+            [RoundingMode::Ceiling,     '-2.450', '-2.45', '-2.4', '-2'],
+            [RoundingMode::Floor,       '-2.450', '-2.45', '-2.5', '-3'],
+            [RoundingMode::HalfUp,      '-2.450', '-2.45', '-2.5', '-2'],
+            [RoundingMode::HalfDown,    '-2.450', '-2.45', '-2.4', '-2'],
+            [RoundingMode::HalfCeiling, '-2.450', '-2.45', '-2.4', '-2'],
+            [RoundingMode::HalfFloor,   '-2.450', '-2.45', '-2.5', '-2'],
+            [RoundingMode::HalfEven,    '-2.450', '-2.45', '-2.4', '-2'],
+            [RoundingMode::HalfOdd,     '-2.450', '-2.45', '-2.5', '-2'],
+
+            [RoundingMode::Unnecessary, '-2.550', '-2.55',   null, null],
+            [RoundingMode::Up,          '-2.550', '-2.55', '-2.6', '-3'],
+            [RoundingMode::Down,        '-2.550', '-2.55', '-2.5', '-2'],
+            [RoundingMode::Ceiling,     '-2.550', '-2.55', '-2.5', '-2'],
+            [RoundingMode::Floor,       '-2.550', '-2.55', '-2.6', '-3'],
+            [RoundingMode::HalfUp,      '-2.550', '-2.55', '-2.6', '-3'],
+            [RoundingMode::HalfDown,    '-2.550', '-2.55', '-2.5', '-3'],
+            [RoundingMode::HalfCeiling, '-2.550', '-2.55', '-2.5', '-3'],
+            [RoundingMode::HalfFloor,   '-2.550', '-2.55', '-2.6', '-3'],
+            [RoundingMode::HalfEven,    '-2.550', '-2.55', '-2.6', '-3'],
+            [RoundingMode::HalfOdd,     '-2.550', '-2.55', '-2.5', '-3'],
+
+            [RoundingMode::Unnecessary, '-1000000000000000000000000000.005', null, null, null],
+            [RoundingMode::Up,          '-1000000000000000000000000000.005', '-1000000000000000000000000000.01', '-1000000000000000000000000000.1', '-1000000000000000000000000001'],
+            [RoundingMode::Down,        '-1000000000000000000000000000.005', '-1000000000000000000000000000.00', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::Ceiling,     '-1000000000000000000000000000.005', '-1000000000000000000000000000.00', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::Floor,       '-1000000000000000000000000000.005', '-1000000000000000000000000000.01', '-1000000000000000000000000000.1', '-1000000000000000000000000001'],
+            [RoundingMode::HalfUp,      '-1000000000000000000000000000.005', '-1000000000000000000000000000.01', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::HalfDown,    '-1000000000000000000000000000.005', '-1000000000000000000000000000.00', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::HalfCeiling, '-1000000000000000000000000000.005', '-1000000000000000000000000000.00', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::HalfFloor,   '-1000000000000000000000000000.005', '-1000000000000000000000000000.01', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::HalfEven,    '-1000000000000000000000000000.005', '-1000000000000000000000000000.00', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::HalfOdd,     '-1000000000000000000000000000.005', '-1000000000000000000000000000.01', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+
+            [RoundingMode::Unnecessary, '-1000000000000000000000000000.015', null, null, null],
+            [RoundingMode::Up,          '-1000000000000000000000000000.015', '-1000000000000000000000000000.02', '-1000000000000000000000000000.1', '-1000000000000000000000000001'],
+            [RoundingMode::Down,        '-1000000000000000000000000000.015', '-1000000000000000000000000000.01', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::Ceiling,     '-1000000000000000000000000000.015', '-1000000000000000000000000000.01', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::Floor,       '-1000000000000000000000000000.015', '-1000000000000000000000000000.02', '-1000000000000000000000000000.1', '-1000000000000000000000000001'],
+            [RoundingMode::HalfUp,      '-1000000000000000000000000000.015', '-1000000000000000000000000000.02', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::HalfDown,    '-1000000000000000000000000000.015', '-1000000000000000000000000000.01', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::HalfCeiling, '-1000000000000000000000000000.015', '-1000000000000000000000000000.01', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::HalfFloor,   '-1000000000000000000000000000.015', '-1000000000000000000000000000.02', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::HalfEven,    '-1000000000000000000000000000.015', '-1000000000000000000000000000.02', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+            [RoundingMode::HalfOdd,     '-1000000000000000000000000000.015', '-1000000000000000000000000000.01', '-1000000000000000000000000000.0', '-1000000000000000000000000000'],
+        ];
+    }
+
+    /**
+     * @param string $dividend  The dividend.
+     * @param string $divisor   The divisor.
+     * @param string $quotient  The expected quotient.
+     * @param string $remainder The expected remainder.
+     */
+    #[DataProvider('providerQuotientAndRemainder')]
+    public function testQuotientAndRemainder(string $dividend, string $divisor, string $quotient, string $remainder): void
+    {
+        $dividend = BigDecimal::of($dividend);
+
+        self::assertBigDecimalEquals($quotient, $dividend->quotient($divisor));
+        self::assertBigDecimalEquals($remainder, $dividend->remainder($divisor));
+
+        [$q, $r] = $dividend->quotientAndRemainder($divisor);
+
+        self::assertBigDecimalEquals($quotient, $q);
+        self::assertBigDecimalEquals($remainder, $r);
+    }
+
+    public static function providerQuotientAndRemainder(): array
+    {
+        return [
+            ['1', '123', '0', '1'],
+            ['1', '-123', '0', '1'],
+            ['-1', '123', '0', '-1'],
+            ['-1', '-123', '0', '-1'],
+
+            ['1999999999999999999999999', '2000000000000000000000000', '0', '1999999999999999999999999'],
+            ['1999999999999999999999999', '-2000000000000000000000000', '0', '1999999999999999999999999'],
+            ['-1999999999999999999999999', '2000000000000000000000000', '0', '-1999999999999999999999999'],
+            ['-1999999999999999999999999', '-2000000000000000000000000', '0', '-1999999999999999999999999'],
+
+            ['123', '1', '123', '0'],
+            ['123', '-1', '-123', '0'],
+            ['-123', '1', '-123', '0'],
+            ['-123', '-1', '123', '0'],
+
+            ['123', '2', '61', '1'],
+            ['123', '-2', '-61', '1'],
+            ['-123', '2', '-61', '-1'],
+            ['-123', '-2', '61', '-1'],
+
+            ['123', '123', '1', '0'],
+            ['123', '-123', '-1', '0'],
+            ['-123', '123', '-1', '0'],
+            ['-123', '-123', '1', '0'],
+
+            ['123', '124', '0', '123'],
+            ['123', '-124', '0', '123'],
+            ['-123', '124', '0', '-123'],
+            ['-123', '-124', '0', '-123'],
+
+            ['124', '123', '1', '1'],
+            ['124', '-123', '-1', '1'],
+            ['-124', '123', '-1', '-1'],
+            ['-124', '-123', '1', '-1'],
+
+            ['1000000000000000000000000000000', '3', '333333333333333333333333333333', '1'],
+            ['1000000000000000000000000000000', '9', '111111111111111111111111111111', '1'],
+            ['1000000000000000000000000000000', '11', '90909090909090909090909090909', '1'],
+            ['1000000000000000000000000000000', '13', '76923076923076923076923076923', '1'],
+            ['1000000000000000000000000000000', '21', '47619047619047619047619047619', '1'],
+
+            ['123456789123456789123456789', '987654321987654321', '124999998', '850308642973765431'],
+            ['123456789123456789123456789', '-87654321987654321', '-1408450676', '65623397056685793'],
+            ['-123456789123456789123456789', '7654321987654321', '-16129030020', '-1834176331740369'],
+            ['-123456789123456789123456789', '-654321987654321', '188678955396', '-205094497790673'],
+
+            ['10.11', '3.3', '3', '0.21'],
+            ['1', '-0.0013', '-769', '0.0003'],
+            ['-1.000000000000000000001', '0.0000009298439898981609', '-1075449', '-0.0000002109080127582569'],
+            ['-1278438782896060000132323.32333', '-53.4836775545640521556878910541', '23903344746475158719036', '-30.0786684482104867175202241524'],
+            ['23999593472872987498347103908209387429846376', '-0.005', '-4799918694574597499669420781641877485969275200', '0.000'],
+
+            ['1000000000000000000000000000000.0', '3', '333333333333333333333333333333', '1.0'],
+            ['1000000000000000000000000000000.0', '9', '111111111111111111111111111111', '1.0'],
+            ['1000000000000000000000000000000.0', '11', '90909090909090909090909090909', '1.0'],
+            ['1000000000000000000000000000000.0', '13', '76923076923076923076923076923', '1.0'],
+            ['0.9999999999999999999999999999999', '0.21', '4', '0.1599999999999999999999999999999'],
+
+            ['1000000000000000000000000000000.0', '3.9', '256410256410256410256410256410', '1.0'],
+            ['-1000000000000000000000000000000.0', '9.8', '-102040816326530612244897959183', '-6.6'],
+            ['1000000000000000000000000000000.0', '-11.7', '-85470085470085470085470085470', '1.0'],
+            ['-1000000000000000000000000000000.0', '-13.7', '72992700729927007299270072992', '-9.6'],
+            ['0.99999999999999999999999999999999', '0.215', '4', '0.13999999999999999999999999999999'],
+        ];
+    }
+
+    public function testQuotientOfZeroThrowsException(): void
+    {
+        $number = BigDecimal::of('1.2');
+
+        $this->expectException(DivisionByZeroException::class);
+        $this->expectExceptionMessageExact('Division by zero.');
+
+        $number->quotient(0);
+    }
+
+    public function testRemainderOfZeroThrowsException(): void
+    {
+        $number = BigDecimal::of('1.2');
+
+        $this->expectException(DivisionByZeroException::class);
+        $this->expectExceptionMessageExact('Division by zero.');
+
+        $number->remainder(0);
+    }
+
+    public function testQuotientAndRemainderOfZeroThrowsException(): void
+    {
+        $number = BigDecimal::of('1.2');
+
+        $this->expectException(DivisionByZeroException::class);
+        $this->expectExceptionMessageExact('Division by zero.');
+
+        $number->quotientAndRemainder(0);
+    }
+
+    /**
+     * @param non-negative-int $scale
+     */
+    #[DataProvider('providerSqrt')]
+    #[DataProvider('providerSqrtMidpointTies')]
+    public function testSqrt(string $number, int $scale, RoundingMode $roundingMode, string $expected): void
+    {
+        $number = BigDecimal::of($number);
+
+        $expectedExceptionMessage = match ($expected) {
+            'SQRT_NOT_EXACT' => 'The square root is not exact and cannot be represented as a decimal without rounding.',
+            'SCALE_TOO_SMALL' => 'The square root is exact but cannot be represented at the requested scale without rounding.',
+            default => null,
+        };
+
+        if ($expectedExceptionMessage !== null) {
+            $this->expectException(RoundingNecessaryException::class);
+            $this->expectExceptionMessageExact($expectedExceptionMessage);
+        }
+
+        $actual = $number->sqrt($scale, $roundingMode);
+
+        if ($expectedExceptionMessage === null) {
+            self::assertBigDecimalEquals($expected, $actual);
+        }
+    }
+
+    /**
+     * @return Generator<array{string, non-negative-int, RoundingMode, string}>
+     */
+    public static function providerSqrt(): Generator
+    {
+        /** @var list<array{string, non-negative-int, RoundingMode, string}> $tests */
+        $tests = [
+            ['0', 0, RoundingMode::Unnecessary, '0'],
+            ['0', 1, RoundingMode::Unnecessary, '0.0'],
+            ['0', 2, RoundingMode::Unnecessary, '0.00'],
+
+            ['0.0', 0, RoundingMode::Unnecessary, '0'],
+            ['0.0', 1, RoundingMode::Unnecessary, '0.0'],
+            ['0.0', 2, RoundingMode::Unnecessary, '0.00'],
+
+            ['1', 0, RoundingMode::Unnecessary, '1'],
+            ['1', 1, RoundingMode::Unnecessary, '1.0'],
+            ['1', 2, RoundingMode::Unnecessary, '1.00'],
+
+            ['1.0', 0, RoundingMode::Unnecessary, '1'],
+            ['1.0', 1, RoundingMode::Unnecessary, '1.0'],
+            ['1.0', 2, RoundingMode::Unnecessary, '1.00'],
+
+            ['1.21', 0, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['1.21', 0, RoundingMode::Up, '2'],
+            ['1.21', 0, RoundingMode::Down, '1'],
+            ['1.21', 0, RoundingMode::HalfUp, '1'],
+
+            ['1.21', 1, RoundingMode::Unnecessary, '1.1'],
+
+            ['0.0625', 2, RoundingMode::Unnecessary, '0.25'],
+
+            ['0.1225', 3, RoundingMode::Unnecessary, '0.350'],
+
+            ['4', 0, RoundingMode::Unnecessary, '2'],
+
+            ['2500.1', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['2500.1', 0, RoundingMode::Up, '51'],
+            ['2500.1', 0, RoundingMode::Down, '50'],
+            ['2500.1', 0, RoundingMode::HalfUp, '50'],
+
+            ['1.00000000000000000000000000000000001', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['1.00000000000000000000000000000000001', 0, RoundingMode::Up, '2'],
+            ['1.00000000000000000000000000000000001', 0, RoundingMode::Down, '1'],
+            ['1.00000000000000000000000000000000001', 0, RoundingMode::HalfUp, '1'],
+
+            ['2', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['2', 0, RoundingMode::Up, '2'],
+            ['2', 0, RoundingMode::Down, '1'],
+            ['2', 0, RoundingMode::HalfUp, '1'],
+
+            ['2', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['2', 1, RoundingMode::Up, '1.5'],
+            ['2', 1, RoundingMode::Down, '1.4'],
+            ['2', 1, RoundingMode::HalfUp, '1.4'],
+
+            ['2', 5, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['2', 5, RoundingMode::Up, '1.41422'],
+            ['2', 5, RoundingMode::Down, '1.41421'],
+            ['2', 5, RoundingMode::HalfUp, '1.41421'],
+
+            ['2', 10, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['2', 10, RoundingMode::Up, '1.4142135624'],
+            ['2', 10, RoundingMode::Down, '1.4142135623'],
+            ['2', 10, RoundingMode::HalfUp, '1.4142135624'],
+
+            ['2', 20, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['2', 20, RoundingMode::Up, '1.41421356237309504881'],
+            ['2', 20, RoundingMode::Down, '1.41421356237309504880'],
+            ['2', 20, RoundingMode::HalfUp, '1.41421356237309504880'],
+
+            ['2.2', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['2.2', 1, RoundingMode::Up, '1.5'],
+            ['2.2', 1, RoundingMode::Down, '1.4'],
+            ['2.2', 1, RoundingMode::HalfUp, '1.5'],
+
+            ['3', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['3', 0, RoundingMode::Up, '2'],
+            ['3', 0, RoundingMode::Down, '1'],
+            ['3', 0, RoundingMode::HalfUp, '2'],
+
+            ['5', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['5', 0, RoundingMode::Up, '3'],
+            ['5', 0, RoundingMode::Down, '2'],
+            ['5', 0, RoundingMode::HalfUp, '2'],
+
+            ['7', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['7', 0, RoundingMode::Up, '3'],
+            ['7', 0, RoundingMode::Down, '2'],
+            ['7', 0, RoundingMode::HalfUp, '3'],
+
+            ['110.6', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['110.6', 0, RoundingMode::Up, '11'],
+            ['110.6', 0, RoundingMode::Down, '10'],
+            ['110.6', 0, RoundingMode::HalfUp, '11'],
+
+            ['110.6', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['110.6', 1, RoundingMode::Up, '10.6'],
+            ['110.6', 1, RoundingMode::Down, '10.5'],
+            ['110.6', 1, RoundingMode::HalfUp, '10.5'],
+
+            ['1.103', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['1.103', 1, RoundingMode::Up, '1.1'],
+            ['1.103', 1, RoundingMode::Down, '1.0'],
+            ['1.103', 1, RoundingMode::HalfUp, '1.1'],
+
+            ['1.11303', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['1.11303', 2, RoundingMode::Up, '1.06'],
+            ['1.11303', 2, RoundingMode::Down, '1.05'],
+            ['1.11303', 2, RoundingMode::HalfUp, '1.06'],
+
+            ['0.001', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.001', 0, RoundingMode::Up, '1'],
+            ['0.001', 0, RoundingMode::Down, '0'],
+            ['0.001', 0, RoundingMode::HalfUp, '0'],
+
+            ['0.0001', 1, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['0.0001', 1, RoundingMode::Up, '0.1'],
+            ['0.0001', 1, RoundingMode::Down, '0.0'],
+            ['0.0001', 1, RoundingMode::HalfUp, '0.0'],
+
+            ['0.25001', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.25001', 1, RoundingMode::Up, '0.6'],
+            ['0.25001', 1, RoundingMode::Down, '0.5'],
+            ['0.25001', 1, RoundingMode::HalfUp, '0.5'],
+
+            ['1.518398738784505763290000000002464466464600000000000000000001', 10, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['1.518398738784505763290000000002464466464600000000000000000001', 10, RoundingMode::Up, '1.2322332324'],
+            ['1.518398738784505763290000000002464466464600000000000000000001', 10, RoundingMode::Down, '1.2322332323'],
+            ['1.518398738784505763290000000002464466464600000000000000000001', 10, RoundingMode::HalfUp, '1.2322332323'],
+
+            ['1.518398738784505763290000000002464466464600000000000000000001', 15, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['1.518398738784505763290000000002464466464600000000000000000001', 15, RoundingMode::Up, '1.232233232300001'],
+            ['1.518398738784505763290000000002464466464600000000000000000001', 15, RoundingMode::Down, '1.232233232300000'],
+            ['1.518398738784505763290000000002464466464600000000000000000001', 15, RoundingMode::HalfUp, '1.232233232300000'],
+
+            ['1.518398738784505763290000000002464466464600000000000000000001', 29, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['1.518398738784505763290000000002464466464600000000000000000001', 29, RoundingMode::Up, '1.23223323230000000000000000001'],
+            ['1.518398738784505763290000000002464466464600000000000000000001', 29, RoundingMode::Down, '1.23223323230000000000000000000'],
+            ['1.518398738784505763290000000002464466464600000000000000000001', 29, RoundingMode::HalfUp, '1.23223323230000000000000000000'],
+
+            ['1.518398738784505763290000000002464466464600000000000000000001', 30, RoundingMode::Unnecessary, '1.232233232300000000000000000001'],
+
+            ['1.518398738784505763290000000002464466464600000000000000000001', 31, RoundingMode::Unnecessary, '1.2322332323000000000000000000010'],
+
+            ['1.518399779282425370250000000002464467309000000000000000000001', 10, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['1.518399779282425370250000000002464467309000000000000000000001', 10, RoundingMode::Up, '1.2322336546'],
+            ['1.518399779282425370250000000002464467309000000000000000000001', 10, RoundingMode::Down, '1.2322336545'],
+            ['1.518399779282425370250000000002464467309000000000000000000001', 10, RoundingMode::HalfUp, '1.2322336545'],
+
+            ['1.518399779282425370250000000002464467309000000000000000000001', 15, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['1.518399779282425370250000000002464467309000000000000000000001', 15, RoundingMode::Up, '1.232233654500001'],
+            ['1.518399779282425370250000000002464467309000000000000000000001', 15, RoundingMode::Down, '1.232233654500000'],
+            ['1.518399779282425370250000000002464467309000000000000000000001', 15, RoundingMode::HalfUp, '1.232233654500000'],
+
+            ['1.518399779282425370250000000002464467309000000000000000000001', 29, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['1.518399779282425370250000000002464467309000000000000000000001', 29, RoundingMode::Up, '1.23223365450000000000000000001'],
+            ['1.518399779282425370250000000002464467309000000000000000000001', 29, RoundingMode::Down, '1.23223365450000000000000000000'],
+            ['1.518399779282425370250000000002464467309000000000000000000001', 29, RoundingMode::HalfUp, '1.23223365450000000000000000000'],
+
+            ['1.518399779282425370250000000002464467309000000000000000000001', 30, RoundingMode::Unnecessary, '1.232233654500000000000000000001'],
+
+            ['1.518399779282425370250000000002464467309000000000000000000001', 31, RoundingMode::Unnecessary, '1.2322336545000000000000000000010'],
+
+            ['1.518399779282425370250000000002464467309', 9, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['1.518399779282425370250000000002464467309', 9, RoundingMode::Up, '1.232233655'],
+            ['1.518399779282425370250000000002464467309', 9, RoundingMode::Down, '1.232233654'],
+            ['1.518399779282425370250000000002464467309', 9, RoundingMode::HalfUp, '1.232233655'],
+
+            ['1.518399779282425370250000000002464467309', 10, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['1.518399779282425370250000000002464467309', 10, RoundingMode::Up, '1.2322336546'],
+            ['1.518399779282425370250000000002464467309', 10, RoundingMode::Down, '1.2322336545'],
+            ['1.518399779282425370250000000002464467309', 10, RoundingMode::HalfUp, '1.2322336545'],
+
+            ['1.518399779282425370250000000002464467309', 248, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['1.518399779282425370250000000002464467309', 248, RoundingMode::Up, '1.23223365450000000000000000000099999999999999999999999999999959423279978269738127818679862261931687909218893901084666518276656889549490614550823842891528383211649564034530427302297458637809126420334662841919450711650591062440427021476033826354768716'],
+            ['1.518399779282425370250000000002464467309', 248, RoundingMode::Down, '1.23223365450000000000000000000099999999999999999999999999999959423279978269738127818679862261931687909218893901084666518276656889549490614550823842891528383211649564034530427302297458637809126420334662841919450711650591062440427021476033826354768715'],
+            ['1.518399779282425370250000000002464467309', 248, RoundingMode::HalfUp, '1.23223365450000000000000000000099999999999999999999999999999959423279978269738127818679862261931687909218893901084666518276656889549490614550823842891528383211649564034530427302297458637809126420334662841919450711650591062440427021476033826354768716'],
+
+            ['1.518399779282425370250000000002464467309', 250, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['1.518399779282425370250000000002464467309', 250, RoundingMode::Up, '1.2322336545000000000000000000009999999999999999999999999999995942327997826973812781867986226193168790921889390108466651827665688954949061455082384289152838321164956403453042730229745863780912642033466284191945071165059106244042702147603382635476871567'],
+            ['1.518399779282425370250000000002464467309', 250, RoundingMode::Down, '1.2322336545000000000000000000009999999999999999999999999999995942327997826973812781867986226193168790921889390108466651827665688954949061455082384289152838321164956403453042730229745863780912642033466284191945071165059106244042702147603382635476871566'],
+            ['1.518399779282425370250000000002464467309', 250, RoundingMode::HalfUp, '1.2322336545000000000000000000009999999999999999999999999999995942327997826973812781867986226193168790921889390108466651827665688954949061455082384289152838321164956403453042730229745863780912642033466284191945071165059106244042702147603382635476871566'],
+
+            ['1.518399779282425370250000000002464467309', 253, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['1.518399779282425370250000000002464467309', 253, RoundingMode::Up, '1.2322336545000000000000000000009999999999999999999999999999995942327997826973812781867986226193168790921889390108466651827665688954949061455082384289152838321164956403453042730229745863780912642033466284191945071165059106244042702147603382635476871566395'],
+            ['1.518399779282425370250000000002464467309', 253, RoundingMode::Down, '1.2322336545000000000000000000009999999999999999999999999999995942327997826973812781867986226193168790921889390108466651827665688954949061455082384289152838321164956403453042730229745863780912642033466284191945071165059106244042702147603382635476871566394'],
+            ['1.518399779282425370250000000002464467309', 253, RoundingMode::HalfUp, '1.2322336545000000000000000000009999999999999999999999999999995942327997826973812781867986226193168790921889390108466651827665688954949061455082384289152838321164956403453042730229745863780912642033466284191945071165059106244042702147603382635476871566394'],
+
+            ['0.9999999999999999999999999', 25, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.9999999999999999999999999', 25, RoundingMode::Up, '1.0000000000000000000000000'],
+            ['0.9999999999999999999999999', 25, RoundingMode::Down, '0.9999999999999999999999999'],
+            ['0.9999999999999999999999999', 25, RoundingMode::HalfUp, '0.9999999999999999999999999'],
+
+            ['0.9999999999999999999999999', 26, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.9999999999999999999999999', 26, RoundingMode::Up, '0.99999999999999999999999995'],
+            ['0.9999999999999999999999999', 26, RoundingMode::Down, '0.99999999999999999999999994'],
+            ['0.9999999999999999999999999', 26, RoundingMode::HalfUp, '0.99999999999999999999999995'],
+
+            // RoundingMode::Up with a discarded fraction of all 9s pre-increment: adding 1 would carry
+            ['39961', 0, RoundingMode::Up, '200'],
+            ['399.61', 1, RoundingMode::Up, '20.0'],
+            ['3.9961', 2, RoundingMode::Up, '2.00'],
+            ['0.0399961', 3, RoundingMode::Up, '0.200'],
+
+            ['0.9', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.9', 0, RoundingMode::Up, '1'],
+            ['0.9', 0, RoundingMode::Down, '0'],
+            ['0.9', 0, RoundingMode::HalfUp, '1'],
+
+            ['0.9', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.9', 1, RoundingMode::Up, '1.0'],
+            ['0.9', 1, RoundingMode::Down, '0.9'],
+            ['0.9', 1, RoundingMode::HalfUp, '0.9'],
+
+            ['0.9', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.9', 2, RoundingMode::Up, '0.95'],
+            ['0.9', 2, RoundingMode::Down, '0.94'],
+            ['0.9', 2, RoundingMode::HalfUp, '0.95'],
+
+            ['0.9', 20, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.9', 20, RoundingMode::Up, '0.94868329805051379960'],
+            ['0.9', 20, RoundingMode::Down, '0.94868329805051379959'],
+            ['0.9', 20, RoundingMode::HalfUp, '0.94868329805051379960'],
+
+            ['1.01', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['1.01', 0, RoundingMode::Up, '2'],
+            ['1.01', 0, RoundingMode::Down, '1'],
+            ['1.01', 0, RoundingMode::HalfUp, '1'],
+
+            ['1.01', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['1.01', 1, RoundingMode::Up, '1.1'],
+            ['1.01', 1, RoundingMode::Down, '1.0'],
+            ['1.01', 1, RoundingMode::HalfUp, '1.0'],
+
+            ['1.01', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['1.01', 2, RoundingMode::Up, '1.01'],
+            ['1.01', 2, RoundingMode::Down, '1.00'],
+            ['1.01', 2, RoundingMode::HalfUp, '1.00'],
+
+            ['1.01', 50, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['1.01', 50, RoundingMode::Up, '1.00498756211208902702192649127595761869450234700264'],
+            ['1.01', 50, RoundingMode::Down, '1.00498756211208902702192649127595761869450234700263'],
+            ['1.01', 50, RoundingMode::HalfUp, '1.00498756211208902702192649127595761869450234700264'],
+
+            ['2', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['2', 2, RoundingMode::Up, '1.42'],
+            ['2', 2, RoundingMode::Down, '1.41'],
+            ['2', 2, RoundingMode::HalfUp, '1.41'],
+
+            ['2', 3, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['2', 3, RoundingMode::Up, '1.415'],
+            ['2', 3, RoundingMode::Down, '1.414'],
+            ['2', 3, RoundingMode::HalfUp, '1.414'],
+
+            ['2.0', 10, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['2.0', 10, RoundingMode::Up, '1.4142135624'],
+            ['2.0', 10, RoundingMode::Down, '1.4142135623'],
+            ['2.0', 10, RoundingMode::HalfUp, '1.4142135624'],
+
+            ['2.00', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['2.00', 100, RoundingMode::Up, '1.4142135623730950488016887242096980785696718753769480731766797379907324784621070388503875343276415728'],
+            ['2.00', 100, RoundingMode::Down, '1.4142135623730950488016887242096980785696718753769480731766797379907324784621070388503875343276415727'],
+            ['2.00', 100, RoundingMode::HalfUp, '1.4142135623730950488016887242096980785696718753769480731766797379907324784621070388503875343276415727'],
+
+            ['2.01', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['2.01', 100, RoundingMode::Up, '1.4177446878757825202955618542708577926112284524295925478183838620667251915680282359142910339946198903'],
+            ['2.01', 100, RoundingMode::Down, '1.4177446878757825202955618542708577926112284524295925478183838620667251915680282359142910339946198902'],
+            ['2.01', 100, RoundingMode::HalfUp, '1.4177446878757825202955618542708577926112284524295925478183838620667251915680282359142910339946198902'],
+
+            ['3', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['3', 1, RoundingMode::Up, '1.8'],
+            ['3', 1, RoundingMode::Down, '1.7'],
+            ['3', 1, RoundingMode::HalfUp, '1.7'],
+
+            ['3', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['3', 2, RoundingMode::Up, '1.74'],
+            ['3', 2, RoundingMode::Down, '1.73'],
+            ['3', 2, RoundingMode::HalfUp, '1.73'],
+
+            ['3.0', 3, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['3.0', 3, RoundingMode::Up, '1.733'],
+            ['3.0', 3, RoundingMode::Down, '1.732'],
+            ['3.0', 3, RoundingMode::HalfUp, '1.732'],
+
+            ['3.00', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['3.00', 100, RoundingMode::Up, '1.7320508075688772935274463415058723669428052538103806280558069794519330169088000370811461867572485757'],
+            ['3.00', 100, RoundingMode::Down, '1.7320508075688772935274463415058723669428052538103806280558069794519330169088000370811461867572485756'],
+            ['3.00', 100, RoundingMode::HalfUp, '1.7320508075688772935274463415058723669428052538103806280558069794519330169088000370811461867572485757'],
+
+            ['3.01', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['3.01', 100, RoundingMode::Up, '1.7349351572897472412324994276999816954904345949805056180301062018688462654791174593725963060697252990'],
+            ['3.01', 100, RoundingMode::Down, '1.7349351572897472412324994276999816954904345949805056180301062018688462654791174593725963060697252989'],
+            ['3.01', 100, RoundingMode::HalfUp, '1.7349351572897472412324994276999816954904345949805056180301062018688462654791174593725963060697252990'],
+
+            ['4.0', 1, RoundingMode::Unnecessary, '2.0'],
+
+            ['4.00', 2, RoundingMode::Unnecessary, '2.00'],
+
+            ['4.000', 50, RoundingMode::Unnecessary, '2.00000000000000000000000000000000000000000000000000'],
+
+            ['4.001', 50, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['4.001', 50, RoundingMode::Up, '2.00024998437695281987761450010498155779765165614815'],
+            ['4.001', 50, RoundingMode::Down, '2.00024998437695281987761450010498155779765165614814'],
+            ['4.001', 50, RoundingMode::HalfUp, '2.00024998437695281987761450010498155779765165614815'],
+
+            ['8', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['8', 0, RoundingMode::Up, '3'],
+            ['8', 0, RoundingMode::Down, '2'],
+            ['8', 0, RoundingMode::HalfUp, '3'],
+
+            ['8', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['8', 1, RoundingMode::Up, '2.9'],
+            ['8', 1, RoundingMode::Down, '2.8'],
+            ['8', 1, RoundingMode::HalfUp, '2.8'],
+
+            ['8', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['8', 2, RoundingMode::Up, '2.83'],
+            ['8', 2, RoundingMode::Down, '2.82'],
+            ['8', 2, RoundingMode::HalfUp, '2.83'],
+
+            ['8', 3, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['8', 3, RoundingMode::Up, '2.829'],
+            ['8', 3, RoundingMode::Down, '2.828'],
+            ['8', 3, RoundingMode::HalfUp, '2.828'],
+
+            ['8', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['8', 100, RoundingMode::Up, '2.8284271247461900976033774484193961571393437507538961463533594759814649569242140777007750686552831455'],
+            ['8', 100, RoundingMode::Down, '2.8284271247461900976033774484193961571393437507538961463533594759814649569242140777007750686552831454'],
+            ['8', 100, RoundingMode::HalfUp, '2.8284271247461900976033774484193961571393437507538961463533594759814649569242140777007750686552831455'],
+
+            ['9', 0, RoundingMode::Unnecessary, '3'],
+            ['9', 1, RoundingMode::Unnecessary, '3.0'],
+            ['9', 2, RoundingMode::Unnecessary, '3.00'],
+
+            ['9.0', 3, RoundingMode::Unnecessary, '3.000'],
+
+            ['9.00', 50, RoundingMode::Unnecessary, '3.00000000000000000000000000000000000000000000000000'],
+
+            ['9.000000000001', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['9.000000000001', 100, RoundingMode::Up, '3.0000000000001666666666666620370370370372942386831275541552354823973654295585021450670206100119695202'],
+            ['9.000000000001', 100, RoundingMode::Down, '3.0000000000001666666666666620370370370372942386831275541552354823973654295585021450670206100119695201'],
+            ['9.000000000001', 100, RoundingMode::HalfUp, '3.0000000000001666666666666620370370370372942386831275541552354823973654295585021450670206100119695201'],
+
+            ['15', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['15', 0, RoundingMode::Up, '4'],
+            ['15', 0, RoundingMode::Down, '3'],
+            ['15', 0, RoundingMode::HalfUp, '4'],
+
+            ['15', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['15', 1, RoundingMode::Up, '3.9'],
+            ['15', 1, RoundingMode::Down, '3.8'],
+            ['15', 1, RoundingMode::HalfUp, '3.9'],
+
+            ['15', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['15', 2, RoundingMode::Up, '3.88'],
+            ['15', 2, RoundingMode::Down, '3.87'],
+            ['15', 2, RoundingMode::HalfUp, '3.87'],
+
+            ['15', 3, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['15', 3, RoundingMode::Up, '3.873'],
+            ['15', 3, RoundingMode::Down, '3.872'],
+            ['15', 3, RoundingMode::HalfUp, '3.873'],
+
+            ['15', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['15', 100, RoundingMode::Up, '3.8729833462074168851792653997823996108329217052915908265875737661134830919369790335192873768586735180'],
+            ['15', 100, RoundingMode::Down, '3.8729833462074168851792653997823996108329217052915908265875737661134830919369790335192873768586735179'],
+            ['15', 100, RoundingMode::HalfUp, '3.8729833462074168851792653997823996108329217052915908265875737661134830919369790335192873768586735179'],
+
+            ['16', 0, RoundingMode::Unnecessary, '4'],
+            ['16', 1, RoundingMode::Unnecessary, '4.0'],
+
+            ['16.0', 2, RoundingMode::Unnecessary, '4.00'],
+            ['16.0', 50, RoundingMode::Unnecessary, '4.00000000000000000000000000000000000000000000000000'],
+
+            ['16.9', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['16.9', 100, RoundingMode::Up, '4.1109609582188931315985616077625340938354216811227818749147563086303727702310096877475225408930903838'],
+            ['16.9', 100, RoundingMode::Down, '4.1109609582188931315985616077625340938354216811227818749147563086303727702310096877475225408930903837'],
+            ['16.9', 100, RoundingMode::HalfUp, '4.1109609582188931315985616077625340938354216811227818749147563086303727702310096877475225408930903837'],
+
+            ['24.000000', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['24.000000', 0, RoundingMode::Up, '5'],
+            ['24.000000', 0, RoundingMode::Down, '4'],
+            ['24.000000', 0, RoundingMode::HalfUp, '5'],
+
+            ['24.000000', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['24.000000', 1, RoundingMode::Up, '4.9'],
+            ['24.000000', 1, RoundingMode::Down, '4.8'],
+            ['24.000000', 1, RoundingMode::HalfUp, '4.9'],
+
+            ['24.000000', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['24.000000', 100, RoundingMode::Up, '4.8989794855663561963945681494117827839318949613133402568653851345019207549146300530797188662092804697'],
+            ['24.000000', 100, RoundingMode::Down, '4.8989794855663561963945681494117827839318949613133402568653851345019207549146300530797188662092804696'],
+            ['24.000000', 100, RoundingMode::HalfUp, '4.8989794855663561963945681494117827839318949613133402568653851345019207549146300530797188662092804696'],
+
+            ['25.0', 0, RoundingMode::Unnecessary, '5'],
+            ['25.0', 1, RoundingMode::Unnecessary, '5.0'],
+            ['25.0', 2, RoundingMode::Unnecessary, '5.00'],
+            ['25.0', 50, RoundingMode::Unnecessary, '5.00000000000000000000000000000000000000000000000000'],
+
+            ['35.0', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['35.0', 0, RoundingMode::Up, '6'],
+            ['35.0', 0, RoundingMode::Down, '5'],
+            ['35.0', 0, RoundingMode::HalfUp, '6'],
+
+            ['35.0', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['35.0', 1, RoundingMode::Up, '6.0'],
+            ['35.0', 1, RoundingMode::Down, '5.9'],
+            ['35.0', 1, RoundingMode::HalfUp, '5.9'],
+
+            ['35.0', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['35.0', 2, RoundingMode::Up, '5.92'],
+            ['35.0', 2, RoundingMode::Down, '5.91'],
+            ['35.0', 2, RoundingMode::HalfUp, '5.92'],
+
+            ['35.0', 3, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['35.0', 3, RoundingMode::Up, '5.917'],
+            ['35.0', 3, RoundingMode::Down, '5.916'],
+            ['35.0', 3, RoundingMode::HalfUp, '5.916'],
+
+            ['35.0', 4, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['35.0', 4, RoundingMode::Up, '5.9161'],
+            ['35.0', 4, RoundingMode::Down, '5.9160'],
+            ['35.0', 4, RoundingMode::HalfUp, '5.9161'],
+
+            ['35.0', 5, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['35.0', 5, RoundingMode::Up, '5.91608'],
+            ['35.0', 5, RoundingMode::Down, '5.91607'],
+            ['35.0', 5, RoundingMode::HalfUp, '5.91608'],
+
+            ['35.0', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['35.0', 100, RoundingMode::Up, '5.9160797830996160425673282915616170484155012307943403228797196691428224591056530367657525271831091781'],
+            ['35.0', 100, RoundingMode::Down, '5.9160797830996160425673282915616170484155012307943403228797196691428224591056530367657525271831091780'],
+            ['35.0', 100, RoundingMode::HalfUp, '5.9160797830996160425673282915616170484155012307943403228797196691428224591056530367657525271831091781'],
+
+            ['35.000000000000001', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['35.000000000000001', 100, RoundingMode::Up, '5.9160797830996161270827537644132741956957234470198942745396537100863774127246283998019188486148209316'],
+            ['35.000000000000001', 100, RoundingMode::Down, '5.9160797830996161270827537644132741956957234470198942745396537100863774127246283998019188486148209315'],
+            ['35.000000000000001', 100, RoundingMode::HalfUp, '5.9160797830996161270827537644132741956957234470198942745396537100863774127246283998019188486148209316'],
+
+            ['35.999999999999999999999999', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['35.999999999999999999999999', 100, RoundingMode::Up, '5.9999999999999999999999999166666666666666666666666660879629629629629629629629549254115226337448559671'],
+            ['35.999999999999999999999999', 100, RoundingMode::Down, '5.9999999999999999999999999166666666666666666666666660879629629629629629629629549254115226337448559670'],
+            ['35.999999999999999999999999', 100, RoundingMode::HalfUp, '5.9999999999999999999999999166666666666666666666666660879629629629629629629629549254115226337448559671'],
+
+            ['36.00', 0, RoundingMode::Unnecessary, '6'],
+            ['36.00', 1, RoundingMode::Unnecessary, '6.0'],
+            ['36.00', 2, RoundingMode::Unnecessary, '6.00'],
+            ['36.00', 3, RoundingMode::Unnecessary, '6.000'],
+            ['36.00', 50, RoundingMode::Unnecessary, '6.00000000000000000000000000000000000000000000000000'],
+
+            ['48.00', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['48.00', 0, RoundingMode::Up, '7'],
+            ['48.00', 0, RoundingMode::Down, '6'],
+            ['48.00', 0, RoundingMode::HalfUp, '7'],
+
+            ['48.00', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['48.00', 2, RoundingMode::Up, '6.93'],
+            ['48.00', 2, RoundingMode::Down, '6.92'],
+            ['48.00', 2, RoundingMode::HalfUp, '6.93'],
+
+            ['48.00', 10, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['48.00', 10, RoundingMode::Up, '6.9282032303'],
+            ['48.00', 10, RoundingMode::Down, '6.9282032302'],
+            ['48.00', 10, RoundingMode::HalfUp, '6.9282032303'],
+
+            ['48.00', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['48.00', 100, RoundingMode::Up, '6.9282032302755091741097853660234894677712210152415225122232279178077320676352001483245847470289943028'],
+            ['48.00', 100, RoundingMode::Down, '6.9282032302755091741097853660234894677712210152415225122232279178077320676352001483245847470289943027'],
+            ['48.00', 100, RoundingMode::HalfUp, '6.9282032302755091741097853660234894677712210152415225122232279178077320676352001483245847470289943027'],
+
+            ['48.99', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['48.99', 100, RoundingMode::Up, '6.9992856778388464346356995151906110076016504604210370025102717611026824990288822856842902895079113687'],
+            ['48.99', 100, RoundingMode::Down, '6.9992856778388464346356995151906110076016504604210370025102717611026824990288822856842902895079113686'],
+            ['48.99', 100, RoundingMode::HalfUp, '6.9992856778388464346356995151906110076016504604210370025102717611026824990288822856842902895079113686'],
+
+            ['49.000', 0, RoundingMode::Unnecessary, '7'],
+            ['49.000', 1, RoundingMode::Unnecessary, '7.0'],
+            ['49.000', 2, RoundingMode::Unnecessary, '7.00'],
+            ['49.000', 50, RoundingMode::Unnecessary, '7.00000000000000000000000000000000000000000000000000'],
+
+            ['63.000', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['63.000', 0, RoundingMode::Up, '8'],
+            ['63.000', 0, RoundingMode::Down, '7'],
+            ['63.000', 0, RoundingMode::HalfUp, '8'],
+
+            ['63.000', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['63.000', 1, RoundingMode::Up, '8.0'],
+            ['63.000', 1, RoundingMode::Down, '7.9'],
+            ['63.000', 1, RoundingMode::HalfUp, '7.9'],
+
+            ['63.000', 50, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['63.000', 50, RoundingMode::Up, '7.93725393319377177150484726091778127713077754924736'],
+            ['63.000', 50, RoundingMode::Down, '7.93725393319377177150484726091778127713077754924735'],
+            ['63.000', 50, RoundingMode::HalfUp, '7.93725393319377177150484726091778127713077754924735'],
+
+            ['63.000', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['63.000', 100, RoundingMode::Up, '7.9372539331937717715048472609177812771307775492473505411050033776032064696908508832811786594236308319'],
+            ['63.000', 100, RoundingMode::Down, '7.9372539331937717715048472609177812771307775492473505411050033776032064696908508832811786594236308318'],
+            ['63.000', 100, RoundingMode::HalfUp, '7.9372539331937717715048472609177812771307775492473505411050033776032064696908508832811786594236308318'],
+
+            ['63.999', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['63.999', 100, RoundingMode::Up, '7.9999374997558574676327405322784897796491608172719005229581557200716046333750586163480165729931946121'],
+            ['63.999', 100, RoundingMode::Down, '7.9999374997558574676327405322784897796491608172719005229581557200716046333750586163480165729931946120'],
+            ['63.999', 100, RoundingMode::HalfUp, '7.9999374997558574676327405322784897796491608172719005229581557200716046333750586163480165729931946120'],
+
+            ['64.000', 0, RoundingMode::Unnecessary, '8'],
+            ['64.000', 1, RoundingMode::Unnecessary, '8.0'],
+            ['64.000', 2, RoundingMode::Unnecessary, '8.00'],
+            ['64.000', 3, RoundingMode::Unnecessary, '8.000'],
+            ['64.000', 5, RoundingMode::Unnecessary, '8.00000'],
+            ['64.000', 10, RoundingMode::Unnecessary, '8.0000000000'],
+
+            ['64.001', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['64.001', 100, RoundingMode::Up, '8.0000624997558612823300065647321162325407871131077227756517693705917932138407362275702583154308502099'],
+            ['64.001', 100, RoundingMode::Down, '8.0000624997558612823300065647321162325407871131077227756517693705917932138407362275702583154308502098'],
+            ['64.001', 100, RoundingMode::HalfUp, '8.0000624997558612823300065647321162325407871131077227756517693705917932138407362275702583154308502099'],
+
+            ['80.0000', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['80.0000', 0, RoundingMode::Up, '9'],
+            ['80.0000', 0, RoundingMode::Down, '8'],
+            ['80.0000', 0, RoundingMode::HalfUp, '9'],
+
+            ['80.0000', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['80.0000', 1, RoundingMode::Up, '9.0'],
+            ['80.0000', 1, RoundingMode::Down, '8.9'],
+            ['80.0000', 1, RoundingMode::HalfUp, '8.9'],
+
+            ['80.0000', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['80.0000', 2, RoundingMode::Up, '8.95'],
+            ['80.0000', 2, RoundingMode::Down, '8.94'],
+            ['80.0000', 2, RoundingMode::HalfUp, '8.94'],
+
+            ['80.0000', 3, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['80.0000', 3, RoundingMode::Up, '8.945'],
+            ['80.0000', 3, RoundingMode::Down, '8.944'],
+            ['80.0000', 3, RoundingMode::HalfUp, '8.944'],
+
+            ['80.0000', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['80.0000', 100, RoundingMode::Up, '8.9442719099991587856366946749251049417624734384461028970835889816420837025512195976576576335151290999'],
+            ['80.0000', 100, RoundingMode::Down, '8.9442719099991587856366946749251049417624734384461028970835889816420837025512195976576576335151290998'],
+            ['80.0000', 100, RoundingMode::HalfUp, '8.9442719099991587856366946749251049417624734384461028970835889816420837025512195976576576335151290999'],
+
+            ['80.9999', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['80.9999', 100, RoundingMode::Up, '8.9999944444427297657453970731875168384468609868424736666730189165386046474591090720552569708711327583'],
+            ['80.9999', 100, RoundingMode::Down, '8.9999944444427297657453970731875168384468609868424736666730189165386046474591090720552569708711327582'],
+            ['80.9999', 100, RoundingMode::HalfUp, '8.9999944444427297657453970731875168384468609868424736666730189165386046474591090720552569708711327582'],
+
+            ['81.0000', 0, RoundingMode::Unnecessary, '9'],
+            ['81.0000', 1, RoundingMode::Unnecessary, '9.0'],
+            ['81.0000', 2, RoundingMode::Unnecessary, '9.00'],
+            ['81.0000', 3, RoundingMode::Unnecessary, '9.000'],
+            ['81.0000', 100, RoundingMode::Unnecessary, '9.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'],
+
+            ['81.0001', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['81.0001', 100, RoundingMode::Up, '9.0000055555538408789733941603538253684017661110877201067416238610513773808272313229667905649560045447'],
+            ['81.0001', 100, RoundingMode::Down, '9.0000055555538408789733941603538253684017661110877201067416238610513773808272313229667905649560045446'],
+            ['81.0001', 100, RoundingMode::HalfUp, '9.0000055555538408789733941603538253684017661110877201067416238610513773808272313229667905649560045446'],
+
+            ['99.0000', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['99.0000', 0, RoundingMode::Up, '10'],
+            ['99.0000', 0, RoundingMode::Down, '9'],
+            ['99.0000', 0, RoundingMode::HalfUp, '10'],
+
+            ['99.0000', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['99.0000', 1, RoundingMode::Up, '10.0'],
+            ['99.0000', 1, RoundingMode::Down, '9.9'],
+            ['99.0000', 1, RoundingMode::HalfUp, '9.9'],
+
+            ['99.0000', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['99.0000', 2, RoundingMode::Up, '9.95'],
+            ['99.0000', 2, RoundingMode::Down, '9.94'],
+            ['99.0000', 2, RoundingMode::HalfUp, '9.95'],
+
+            ['99.0000', 3, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['99.0000', 3, RoundingMode::Up, '9.950'],
+            ['99.0000', 3, RoundingMode::Down, '9.949'],
+            ['99.0000', 3, RoundingMode::HalfUp, '9.950'],
+
+            ['99.0000', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['99.0000', 100, RoundingMode::Up, '9.9498743710661995473447982100120600517812656367680607911760464383494539278271315401265301973848719528'],
+            ['99.0000', 100, RoundingMode::Down, '9.9498743710661995473447982100120600517812656367680607911760464383494539278271315401265301973848719527'],
+            ['99.0000', 100, RoundingMode::HalfUp, '9.9498743710661995473447982100120600517812656367680607911760464383494539278271315401265301973848719527'],
+
+            ['99.9999', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['99.9999', 100, RoundingMode::Up, '9.9999949999987499993749996093747265622949217138670565794807433154677543830170797681772155388691566434'],
+            ['99.9999', 100, RoundingMode::Down, '9.9999949999987499993749996093747265622949217138670565794807433154677543830170797681772155388691566433'],
+            ['99.9999', 100, RoundingMode::HalfUp, '9.9999949999987499993749996093747265622949217138670565794807433154677543830170797681772155388691566433'],
+
+            ['100.00000', 0, RoundingMode::Unnecessary, '10'],
+            ['100.00000', 1, RoundingMode::Unnecessary, '10.0'],
+            ['100.00000', 2, RoundingMode::Unnecessary, '10.00'],
+            ['100.00000', 3, RoundingMode::Unnecessary, '10.000'],
+            ['100.00000', 100, RoundingMode::Unnecessary, '10.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'],
+
+            ['100.00001', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['100.00001', 100, RoundingMode::Up, '10.0000004999999875000006249999609375027343747949218911132799407960075378325233467481612458396019939179'],
+            ['100.00001', 100, RoundingMode::Down, '10.0000004999999875000006249999609375027343747949218911132799407960075378325233467481612458396019939178'],
+            ['100.00001', 100, RoundingMode::HalfUp, '10.0000004999999875000006249999609375027343747949218911132799407960075378325233467481612458396019939179'],
+
+            ['536137214136734800142146901786039940282473271927911507640625', 100, RoundingMode::Unnecessary, '732213912826528310663262741625.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'],
+
+            ['536137214136734800142146901787504368108126328549238033123875', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['536137214136734800142146901787504368108126328549238033123875', 100, RoundingMode::Up, '732213912826528310663262741625.9999999999999999999999999999993171394434860226777473099041602996062918768042176806905944729779944326'],
+            ['536137214136734800142146901787504368108126328549238033123875', 100, RoundingMode::Down, '732213912826528310663262741625.9999999999999999999999999999993171394434860226777473099041602996062918768042176806905944729779944325'],
+            ['536137214136734800142146901787504368108126328549238033123875', 100, RoundingMode::HalfUp, '732213912826528310663262741625.9999999999999999999999999999993171394434860226777473099041602996062918768042176806905944729779944326'],
+
+            ['536137214136734800142146901787504368108126328549238033123876', 100, RoundingMode::Unnecessary, '732213912826528310663262741626.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'],
+
+            ['5651495859544574019979802175954184725583245698990648064256.0000000001', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['5651495859544574019979802175954184725583245698990648064256.0000000001', 100, RoundingMode::Up, '75176431543034642899535752016.0000000000000000000000000000000000000006651020668808623891656648072197795077909627885735661691784991'],
+            ['5651495859544574019979802175954184725583245698990648064256.0000000001', 100, RoundingMode::Down, '75176431543034642899535752016.0000000000000000000000000000000000000006651020668808623891656648072197795077909627885735661691784990'],
+            ['5651495859544574019979802175954184725583245698990648064256.0000000001', 100, RoundingMode::HalfUp, '75176431543034642899535752016.0000000000000000000000000000000000000006651020668808623891656648072197795077909627885735661691784991'],
+
+            ['5651495859544574019979802176104537588669314984789719568288.9999999999', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['5651495859544574019979802176104537588669314984789719568288.9999999999', 100, RoundingMode::Up, '75176431543034642899535752016.9999999999999999999999999999999999999993348979331191376108343351927890677073964211143577833889761308'],
+            ['5651495859544574019979802176104537588669314984789719568288.9999999999', 100, RoundingMode::Down, '75176431543034642899535752016.9999999999999999999999999999999999999993348979331191376108343351927890677073964211143577833889761307'],
+            ['5651495859544574019979802176104537588669314984789719568288.9999999999', 100, RoundingMode::HalfUp, '75176431543034642899535752016.9999999999999999999999999999999999999993348979331191376108343351927890677073964211143577833889761308'],
+
+            ['5651495859544574019979802176104537588669314984789719568289.00000000001', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['5651495859544574019979802176104537588669314984789719568289.00000000001', 100, RoundingMode::Up, '75176431543034642899535752017.0000000000000000000000000000000000000000665102066880862389165664807210932292603578885642216611023870'],
+            ['5651495859544574019979802176104537588669314984789719568289.00000000001', 100, RoundingMode::Down, '75176431543034642899535752017.0000000000000000000000000000000000000000665102066880862389165664807210932292603578885642216611023869'],
+            ['5651495859544574019979802176104537588669314984789719568289.00000000001', 100, RoundingMode::HalfUp, '75176431543034642899535752017.0000000000000000000000000000000000000000665102066880862389165664807210932292603578885642216611023869'],
+
+            ['17', 60, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['17', 60, RoundingMode::Up, '4.123105625617660549821409855974077025147199225373620434398634'],
+            ['17', 60, RoundingMode::Down, '4.123105625617660549821409855974077025147199225373620434398633'],
+            ['17', 60, RoundingMode::HalfUp, '4.123105625617660549821409855974077025147199225373620434398634'],
+
+            ['17', 61, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['17', 61, RoundingMode::Up, '4.1231056256176605498214098559740770251471992253736204343986336'],
+            ['17', 61, RoundingMode::Down, '4.1231056256176605498214098559740770251471992253736204343986335'],
+            ['17', 61, RoundingMode::HalfUp, '4.1231056256176605498214098559740770251471992253736204343986336'],
+
+            ['17', 62, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['17', 62, RoundingMode::Up, '4.12310562561766054982140985597407702514719922537362043439863358'],
+            ['17', 62, RoundingMode::Down, '4.12310562561766054982140985597407702514719922537362043439863357'],
+            ['17', 62, RoundingMode::HalfUp, '4.12310562561766054982140985597407702514719922537362043439863357'],
+
+            ['17', 63, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['17', 63, RoundingMode::Up, '4.123105625617660549821409855974077025147199225373620434398633574'],
+            ['17', 63, RoundingMode::Down, '4.123105625617660549821409855974077025147199225373620434398633573'],
+            ['17', 63, RoundingMode::HalfUp, '4.123105625617660549821409855974077025147199225373620434398633573'],
+
+            ['17', 64, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['17', 64, RoundingMode::Up, '4.1231056256176605498214098559740770251471992253736204343986335731'],
+            ['17', 64, RoundingMode::Down, '4.1231056256176605498214098559740770251471992253736204343986335730'],
+            ['17', 64, RoundingMode::HalfUp, '4.1231056256176605498214098559740770251471992253736204343986335731'],
+
+            ['17', 65, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['17', 65, RoundingMode::Up, '4.12310562561766054982140985597407702514719922537362043439863357310'],
+            ['17', 65, RoundingMode::Down, '4.12310562561766054982140985597407702514719922537362043439863357309'],
+            ['17', 65, RoundingMode::HalfUp, '4.12310562561766054982140985597407702514719922537362043439863357309'],
+
+            ['17', 66, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['17', 66, RoundingMode::Up, '4.123105625617660549821409855974077025147199225373620434398633573095'],
+            ['17', 66, RoundingMode::Down, '4.123105625617660549821409855974077025147199225373620434398633573094'],
+            ['17', 66, RoundingMode::HalfUp, '4.123105625617660549821409855974077025147199225373620434398633573095'],
+
+            ['17', 67, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['17', 67, RoundingMode::Up, '4.1231056256176605498214098559740770251471992253736204343986335730950'],
+            ['17', 67, RoundingMode::Down, '4.1231056256176605498214098559740770251471992253736204343986335730949'],
+            ['17', 67, RoundingMode::HalfUp, '4.1231056256176605498214098559740770251471992253736204343986335730950'],
+
+            ['17', 68, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['17', 68, RoundingMode::Up, '4.12310562561766054982140985597407702514719922537362043439863357309496'],
+            ['17', 68, RoundingMode::Down, '4.12310562561766054982140985597407702514719922537362043439863357309495'],
+            ['17', 68, RoundingMode::HalfUp, '4.12310562561766054982140985597407702514719922537362043439863357309495'],
+
+            ['17', 69, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['17', 69, RoundingMode::Up, '4.123105625617660549821409855974077025147199225373620434398633573094955'],
+            ['17', 69, RoundingMode::Down, '4.123105625617660549821409855974077025147199225373620434398633573094954'],
+            ['17', 69, RoundingMode::HalfUp, '4.123105625617660549821409855974077025147199225373620434398633573094954'],
+
+            ['17', 70, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['17', 70, RoundingMode::Up, '4.1231056256176605498214098559740770251471992253736204343986335730949544'],
+            ['17', 70, RoundingMode::Down, '4.1231056256176605498214098559740770251471992253736204343986335730949543'],
+            ['17', 70, RoundingMode::HalfUp, '4.1231056256176605498214098559740770251471992253736204343986335730949543'],
+
+            ['0.0019', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.0019', 0, RoundingMode::Up, '1'],
+            ['0.0019', 0, RoundingMode::Down, '0'],
+            ['0.0019', 0, RoundingMode::HalfUp, '0'],
+
+            ['0.0019', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.0019', 1, RoundingMode::Up, '0.1'],
+            ['0.0019', 1, RoundingMode::Down, '0.0'],
+            ['0.0019', 1, RoundingMode::HalfUp, '0.0'],
+
+            ['0.0019', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.0019', 2, RoundingMode::Up, '0.05'],
+            ['0.0019', 2, RoundingMode::Down, '0.04'],
+            ['0.0019', 2, RoundingMode::HalfUp, '0.04'],
+
+            ['0.0019', 3, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.0019', 3, RoundingMode::Up, '0.044'],
+            ['0.0019', 3, RoundingMode::Down, '0.043'],
+            ['0.0019', 3, RoundingMode::HalfUp, '0.044'],
+
+            ['0.0019', 10, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.0019', 10, RoundingMode::Up, '0.0435889895'],
+            ['0.0019', 10, RoundingMode::Down, '0.0435889894'],
+            ['0.0019', 10, RoundingMode::HalfUp, '0.0435889894'],
+
+            ['0.0019', 70, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.0019', 70, RoundingMode::Up, '0.0435889894354067355223698198385961565913700392523244493689034413815956'],
+            ['0.0019', 70, RoundingMode::Down, '0.0435889894354067355223698198385961565913700392523244493689034413815955'],
+            ['0.0019', 70, RoundingMode::HalfUp, '0.0435889894354067355223698198385961565913700392523244493689034413815956'],
+
+            ['0.00000000015727468406479', 0, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.00000000015727468406479', 0, RoundingMode::Up, '1'],
+            ['0.00000000015727468406479', 0, RoundingMode::Down, '0'],
+            ['0.00000000015727468406479', 0, RoundingMode::HalfUp, '0'],
+
+            ['0.00000000015727468406479', 1, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.00000000015727468406479', 1, RoundingMode::Up, '0.1'],
+            ['0.00000000015727468406479', 1, RoundingMode::Down, '0.0'],
+            ['0.00000000015727468406479', 1, RoundingMode::HalfUp, '0.0'],
+
+            ['0.00000000015727468406479', 2, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.00000000015727468406479', 2, RoundingMode::Up, '0.01'],
+            ['0.00000000015727468406479', 2, RoundingMode::Down, '0.00'],
+            ['0.00000000015727468406479', 2, RoundingMode::HalfUp, '0.00'],
+
+            ['0.00000000015727468406479', 3, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.00000000015727468406479', 3, RoundingMode::Up, '0.001'],
+            ['0.00000000015727468406479', 3, RoundingMode::Down, '0.000'],
+            ['0.00000000015727468406479', 3, RoundingMode::HalfUp, '0.000'],
+
+            ['0.00000000015727468406479', 4, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.00000000015727468406479', 4, RoundingMode::Up, '0.0001'],
+            ['0.00000000015727468406479', 4, RoundingMode::Down, '0.0000'],
+            ['0.00000000015727468406479', 4, RoundingMode::HalfUp, '0.0000'],
+
+            ['0.00000000015727468406479', 5, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.00000000015727468406479', 5, RoundingMode::Up, '0.00002'],
+            ['0.00000000015727468406479', 5, RoundingMode::Down, '0.00001'],
+            ['0.00000000015727468406479', 5, RoundingMode::HalfUp, '0.00001'],
+
+            ['0.00000000015727468406479', 6, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.00000000015727468406479', 6, RoundingMode::Up, '0.000013'],
+            ['0.00000000015727468406479', 6, RoundingMode::Down, '0.000012'],
+            ['0.00000000015727468406479', 6, RoundingMode::HalfUp, '0.000013'],
+
+            ['0.00000000015727468406479', 7, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.00000000015727468406479', 7, RoundingMode::Up, '0.0000126'],
+            ['0.00000000015727468406479', 7, RoundingMode::Down, '0.0000125'],
+            ['0.00000000015727468406479', 7, RoundingMode::HalfUp, '0.0000125'],
+
+            ['0.00000000015727468406479', 8, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.00000000015727468406479', 8, RoundingMode::Up, '0.00001255'],
+            ['0.00000000015727468406479', 8, RoundingMode::Down, '0.00001254'],
+            ['0.00000000015727468406479', 8, RoundingMode::HalfUp, '0.00001254'],
+
+            ['0.00000000015727468406479', 9, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.00000000015727468406479', 9, RoundingMode::Up, '0.000012541'],
+            ['0.00000000015727468406479', 9, RoundingMode::Down, '0.000012540'],
+            ['0.00000000015727468406479', 9, RoundingMode::HalfUp, '0.000012541'],
+
+            ['0.00000000015727468406479', 10, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.00000000015727468406479', 10, RoundingMode::Up, '0.0000125410'],
+            ['0.00000000015727468406479', 10, RoundingMode::Down, '0.0000125409'],
+            ['0.00000000015727468406479', 10, RoundingMode::HalfUp, '0.0000125409'],
+
+            ['0.00000000015727468406479', 100, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.00000000015727468406479', 100, RoundingMode::Up, '0.0000125409203834802332262270521125445995500262491027973910117525063503841909945796984522050136239470'],
+            ['0.00000000015727468406479', 100, RoundingMode::Down, '0.0000125409203834802332262270521125445995500262491027973910117525063503841909945796984522050136239469'],
+            ['0.00000000015727468406479', 100, RoundingMode::HalfUp, '0.0000125409203834802332262270521125445995500262491027973910117525063503841909945796984522050136239470'],
+
+            ['0.04', 0, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['0.04', 0, RoundingMode::Up, '1'],
+            ['0.04', 0, RoundingMode::Down, '0'],
+            ['0.04', 0, RoundingMode::HalfUp, '0'],
+
+            ['0.04', 1, RoundingMode::Unnecessary, '0.2'],
+            ['0.04', 2, RoundingMode::Unnecessary, '0.20'],
+            ['0.04', 10, RoundingMode::Unnecessary, '0.2000000000'],
+
+            ['0.0004', 4, RoundingMode::Unnecessary, '0.0200'],
+
+            ['0.00000000000000000000000000000004', 8, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['0.00000000000000000000000000000004', 8, RoundingMode::Up, '0.00000001'],
+            ['0.00000000000000000000000000000004', 8, RoundingMode::Down, '0.00000000'],
+            ['0.00000000000000000000000000000004', 8, RoundingMode::HalfUp, '0.00000000'],
+
+            ['0.00000000000000000000000000000004', 16, RoundingMode::Unnecessary, '0.0000000000000002'],
+            ['0.00000000000000000000000000000004', 32, RoundingMode::Unnecessary, '0.00000000000000020000000000000000'],
+
+            ['0.000000000000000000000000000000004', 32, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['0.000000000000000000000000000000004', 32, RoundingMode::Up, '0.00000000000000006324555320336759'],
+            ['0.000000000000000000000000000000004', 32, RoundingMode::Down, '0.00000000000000006324555320336758'],
+            ['0.000000000000000000000000000000004', 32, RoundingMode::HalfUp, '0.00000000000000006324555320336759'],
+
+            ['111111111111111111111.11111111111111', 90, RoundingMode::Unnecessary, 'SQRT_NOT_EXACT'],
+            ['111111111111111111111.11111111111111', 90, RoundingMode::Up, '10540925533.894597773329645148109061726360556128277733889543457102096672435043305908711407747018689087'],
+            ['111111111111111111111.11111111111111', 90, RoundingMode::Down, '10540925533.894597773329645148109061726360556128277733889543457102096672435043305908711407747018689086'],
+            ['111111111111111111111.11111111111111', 90, RoundingMode::HalfUp, '10540925533.894597773329645148109061726360556128277733889543457102096672435043305908711407747018689086'],
+        ];
+
+        foreach ($tests as [$number, $scale, $roundingMode, $expected]) {
+            yield [$number, $scale, $roundingMode, $expected];
+
+            $isExpectedException = in_array($expected, [
+                'SQRT_NOT_EXACT',
+                'SCALE_TOO_SMALL',
+            ], true);
+
+            // No row here is at a midpoint tie, so HalfUp can expand to every other Half* mode.
+            // Unnecessary expands to every mode for exact rows only (exception rows skip it).
+            // Tie cases live in providerSqrtMidpointTies with their own narrower expansion.
+            $eqs = match ($roundingMode) {
+                RoundingMode::Unnecessary => $isExpectedException ? [] : self::ALL_ROUNDING_MODES_BUT_UNNECESSARY,
+                RoundingMode::Up => [RoundingMode::Ceiling],
+                RoundingMode::Down => [RoundingMode::Floor],
+                RoundingMode::HalfUp => [
+                    RoundingMode::HalfDown,
+                    RoundingMode::HalfCeiling,
+                    RoundingMode::HalfFloor,
+                    RoundingMode::HalfEven,
+                    RoundingMode::HalfOdd,
+                ],
+                default => [],
+            };
+
+            foreach ($eqs as $eq) {
+                yield [$number, $scale, $eq, $expected];
+            }
+        }
+    }
+
+    /**
+     * Midpoint-tie cases: each Half* mode gives a different answer, so all are listed explicitly.
+     * The foreach only does Up/Down ↔ Ceiling/Floor renaming (no HalfUp expansion).
+     *
+     * @return Generator<array{string, non-negative-int, RoundingMode, string}>
+     */
+    public static function providerSqrtMidpointTies(): Generator
+    {
+        $tests = [
+            // √0.25 = 0.5 → tie between 0 and 1.
+            ['0.25', 0, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['0.25', 0, RoundingMode::Down,        '0'],
+            ['0.25', 0, RoundingMode::Up,          '1'],
+            ['0.25', 0, RoundingMode::HalfUp,      '1'],
+            ['0.25', 0, RoundingMode::HalfDown,    '0'],
+            ['0.25', 0, RoundingMode::HalfEven,    '0'],
+            ['0.25', 0, RoundingMode::HalfOdd,     '1'],
+            ['0.25', 0, RoundingMode::HalfCeiling, '1'],
+            ['0.25', 0, RoundingMode::HalfFloor,   '0'],
+
+            // √2.25 = 1.5 → tie between 1 (odd) and 2 (even); HalfEven picks 2, HalfOdd picks 1.
+            ['2.25', 0, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['2.25', 0, RoundingMode::Down,        '1'],
+            ['2.25', 0, RoundingMode::Up,          '2'],
+            ['2.25', 0, RoundingMode::HalfUp,      '2'],
+            ['2.25', 0, RoundingMode::HalfDown,    '1'],
+            ['2.25', 0, RoundingMode::HalfEven,    '2'],
+            ['2.25', 0, RoundingMode::HalfOdd,     '1'],
+            ['2.25', 0, RoundingMode::HalfCeiling, '2'],
+            ['2.25', 0, RoundingMode::HalfFloor,   '1'],
+
+            // √0.0625 = 0.25 → tie between 0.2 (even) and 0.3 (odd); HalfEven picks 0.2, HalfOdd picks 0.3.
+            ['0.0625', 1, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['0.0625', 1, RoundingMode::Down,        '0.2'],
+            ['0.0625', 1, RoundingMode::Up,          '0.3'],
+            ['0.0625', 1, RoundingMode::HalfUp,      '0.3'],
+            ['0.0625', 1, RoundingMode::HalfDown,    '0.2'],
+            ['0.0625', 1, RoundingMode::HalfEven,    '0.2'],
+            ['0.0625', 1, RoundingMode::HalfOdd,     '0.3'],
+            ['0.0625', 1, RoundingMode::HalfCeiling, '0.3'],
+            ['0.0625', 1, RoundingMode::HalfFloor,   '0.2'],
+
+            // √0.1225 = 0.35 → tie between 0.3 (odd) and 0.4 (even); HalfEven picks 0.4, HalfOdd picks 0.3.
+            ['0.1225', 1, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['0.1225', 1, RoundingMode::Down,        '0.3'],
+            ['0.1225', 1, RoundingMode::Up,          '0.4'],
+            ['0.1225', 1, RoundingMode::HalfUp,      '0.4'],
+            ['0.1225', 1, RoundingMode::HalfDown,    '0.3'],
+            ['0.1225', 1, RoundingMode::HalfEven,    '0.4'],
+            ['0.1225', 1, RoundingMode::HalfOdd,     '0.3'],
+            ['0.1225', 1, RoundingMode::HalfCeiling, '0.4'],
+            ['0.1225', 1, RoundingMode::HalfFloor,   '0.3'],
+        ];
+
+        foreach ($tests as [$number, $scale, $roundingMode, $expected]) {
+            yield [$number, $scale, $roundingMode, $expected];
+
+            // Only the sign-based Up/Down → Ceiling/Floor renaming is safe at a tie;
+            // expanding HalfUp would conflict with the explicit Half* rows above.
+            $eqs = match ($roundingMode) {
+                RoundingMode::Up => [RoundingMode::Ceiling],
+                RoundingMode::Down => [RoundingMode::Floor],
+                default => [],
+            };
+
+            foreach ($eqs as $eq) {
+                yield [$number, $scale, $eq, $expected];
+            }
+        }
+    }
+
+    public function testSqrtOfNegativeNumber(): void
+    {
+        $number = BigDecimal::of(-1);
+        $this->expectException(NegativeNumberException::class);
+        $this->expectExceptionMessageExact('Cannot calculate the square root of a negative number.');
+
+        $number->sqrt(0);
+    }
+
+    public function testSqrtWithNegativeScale(): void
+    {
+        $number = BigDecimal::one();
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('The scale must not be negative.');
+
+        // @phpstan-ignore argument.type
+        $number->sqrt(-1);
+    }
+
+    /**
+     * @param positive-int     $n
+     * @param non-negative-int $scale
+     */
+    #[DataProvider('providerNthRoot')]
+    #[DataProvider('providerNthRootFromSqrt')]
+    #[DataProvider('providerNthRootMidpointTies')]
+    #[DataProvider('providerNthRootMidpointTiesFromSqrt')]
+    public function testNthRoot(string $number, int $n, int $scale, RoundingMode $roundingMode, string $expected): void
+    {
+        $number = BigDecimal::of($number);
+
+        $expectedExceptionMessage = match ($expected) {
+            'NTH_ROOT_NOT_EXACT' => 'The nth root is not exact and cannot be represented as a decimal without rounding.',
+            'SCALE_TOO_SMALL' => 'The nth root is exact but cannot be represented at the requested scale without rounding.',
+            default => null,
+        };
+
+        if ($expectedExceptionMessage !== null) {
+            $this->expectException(RoundingNecessaryException::class);
+            $this->expectExceptionMessageExact($expectedExceptionMessage);
+        }
+
+        $actual = $number->nthRoot($n, $scale, $roundingMode);
+
+        if ($expectedExceptionMessage === null) {
+            self::assertBigDecimalEquals($expected, $actual);
+        }
+    }
+
+    public static function providerNthRoot(): Generator
+    {
+        $tests = [
+            // Zero at various scales for various n
+            ['0', 2, 0, RoundingMode::Unnecessary, '0'],
+            ['0', 2, 5, RoundingMode::Unnecessary, '0.00000'],
+            ['0', 3, 0, RoundingMode::Unnecessary, '0'],
+            ['0', 3, 3, RoundingMode::Unnecessary, '0.000'],
+            ['0', 5, 2, RoundingMode::Unnecessary, '0.00'],
+            ['0.0', 3, 4, RoundingMode::Unnecessary, '0.0000'],
+            ['0.000', 7, 10, RoundingMode::Unnecessary, '0.0000000000'],
+
+            // One at various scales for various n
+            ['1', 2, 0, RoundingMode::Unnecessary, '1'],
+            ['1', 2, 4, RoundingMode::Unnecessary, '1.0000'],
+            ['1', 3, 2, RoundingMode::Unnecessary, '1.00'],
+            ['1', 100, 8, RoundingMode::Unnecessary, '1.00000000'],
+
+            // n = 1
+
+            ['1.23',  1, 2, RoundingMode::Unnecessary, '1.23'],
+            ['1.23',  1, 3, RoundingMode::Unnecessary, '1.230'],
+            ['1.23',  1, 4, RoundingMode::Unnecessary, '1.2300'],
+            ['-1.23', 1, 2, RoundingMode::Unnecessary, '-1.23'],
+            ['-1.23', 1, 3, RoundingMode::Unnecessary, '-1.230'],
+            ['-1.23', 1, 4, RoundingMode::Unnecessary, '-1.2300'],
+            ['0',     1, 4, RoundingMode::Unnecessary, '0.0000'],
+            ['0.0',   1, 0, RoundingMode::Unnecessary, '0'],
+            ['0.00',  1, 1, RoundingMode::Unnecessary, '0.0'],
+            ['1.23',  1, 1, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['1.23',  1, 1, RoundingMode::Down,        '1.2'],
+            ['1.23',  1, 1, RoundingMode::Up,          '1.3'],
+            ['1.23',  1, 1, RoundingMode::HalfUp,      '1.2'],
+            ['1.27',  1, 1, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['1.27',  1, 1, RoundingMode::Down,        '1.2'],
+            ['1.27',  1, 1, RoundingMode::Up,          '1.3'],
+            ['1.27',  1, 1, RoundingMode::HalfUp,      '1.3'],
+            ['-1.23', 1, 1, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['-1.23', 1, 1, RoundingMode::Down,        '-1.2'],
+            ['-1.23', 1, 1, RoundingMode::Up,          '-1.3'],
+            ['-1.23', 1, 1, RoundingMode::HalfUp,      '-1.2'],
+            ['-1.27', 1, 1, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['-1.27', 1, 1, RoundingMode::Down,        '-1.2'],
+            ['-1.27', 1, 1, RoundingMode::Up,          '-1.3'],
+            ['-1.27', 1, 1, RoundingMode::HalfUp,      '-1.3'],
+
+            // n = 2 is covered by providerNthRootFromSqrt, which replays the entire providerSqrt
+            // dataset at n=2 to confirm nthRoot(2) matches sqrt() semantics.
+
+            // n = 3
+
+            // Perfect cubes with integer input.
+            ['8', 3, 0, RoundingMode::Unnecessary, '2'],
+            ['8', 3, 3, RoundingMode::Unnecessary, '2.000'],
+            ['27', 3, 0, RoundingMode::Unnecessary, '3'],
+            ['125', 3, 2, RoundingMode::Unnecessary, '5.00'],
+
+            // Perfect cube with fractional input: 1.728 = 1.2^3.
+            ['1.728', 3, 1, RoundingMode::Unnecessary, '1.2'],
+            ['1.728', 3, 3, RoundingMode::Unnecessary, '1.200'],
+            ['1.728', 3, 5, RoundingMode::Unnecessary, '1.20000'],
+            // Exact but scale too small: 1.2 doesn't fit at scale 0.
+            ['1.728', 3, 0, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['1.728', 3, 0, RoundingMode::Up, '2'],
+            ['1.728', 3, 0, RoundingMode::Down, '1'],
+            ['1.728', 3, 0, RoundingMode::HalfUp, '1'],
+
+            // Perfect cube negative (odd n is defined).
+            ['-8', 3, 0, RoundingMode::Unnecessary, '-2'],
+            ['-1.728', 3, 1, RoundingMode::Unnecessary, '-1.2'],
+            ['-1.728', 3, 3, RoundingMode::Unnecessary, '-1.200'],
+            ['-1.728', 3, 0, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['-1.728', 3, 0, RoundingMode::Up, '-2'],
+            ['-1.728', 3, 0, RoundingMode::Down, '-1'],
+
+            // Perfect cube on a value with a non-trivial input scale: 0.000001 = (0.01)^3.
+            ['0.000001', 3, 2, RoundingMode::Unnecessary, '0.01'],
+            ['0.000001', 3, 6, RoundingMode::Unnecessary, '0.010000'],
+            ['0.000001', 3, 1, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['0.000001', 3, 1, RoundingMode::Up, '0.1'],
+            ['0.000001', 3, 1, RoundingMode::Down, '0.0'],
+
+            // Non-exact ∛2 across a range of scales. 2^(1/3) ≈ 1.2599210498948731647672106072...
+            ['2', 3, 0, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['2', 3, 0, RoundingMode::Up, '2'],
+            ['2', 3, 0, RoundingMode::Down, '1'],
+            ['2', 3, 0, RoundingMode::HalfUp, '1'],
+
+            ['2', 3, 1, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['2', 3, 1, RoundingMode::Up, '1.3'],
+            ['2', 3, 1, RoundingMode::Down, '1.2'],
+            ['2', 3, 1, RoundingMode::HalfUp, '1.3'],
+
+            ['2', 3, 5, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['2', 3, 5, RoundingMode::Up, '1.25993'],
+            ['2', 3, 5, RoundingMode::Down, '1.25992'],
+            ['2', 3, 5, RoundingMode::HalfUp, '1.25992'],
+
+            ['2', 3, 10, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['2', 3, 10, RoundingMode::Up, '1.2599210499'],
+            ['2', 3, 10, RoundingMode::Down, '1.2599210498'],
+            ['2', 3, 10, RoundingMode::HalfUp, '1.2599210499'],
+
+            ['2', 3, 20, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['2', 3, 20, RoundingMode::Up, '1.25992104989487316477'],
+            ['2', 3, 20, RoundingMode::Down, '1.25992104989487316476'],
+            ['2', 3, 20, RoundingMode::HalfUp, '1.25992104989487316477'],
+
+            // Non-exact on inputs whose scale is not a multiple of n, exercising the padding path.
+            // 0.25 (inputScale=2, padding=1): 0.25^(1/3) ≈ 0.62996052494...
+            ['0.25', 3, 10, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['0.25', 3, 10, RoundingMode::Up, '0.6299605250'],
+            ['0.25', 3, 10, RoundingMode::Down, '0.6299605249'],
+            ['0.25', 3, 10, RoundingMode::HalfUp, '0.6299605249'],
+
+            // 1.5 (inputScale=1, padding=2): 1.5^(1/3) ≈ 1.14471424255...
+            ['1.5', 3, 10, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['1.5', 3, 10, RoundingMode::Up, '1.1447142426'],
+            ['1.5', 3, 10, RoundingMode::Down, '1.1447142425'],
+            ['1.5', 3, 10, RoundingMode::HalfUp, '1.1447142426'],
+
+            // Non-exact cube root of a fractional input. 2.5^(1/3) ≈ 1.35720880829745...
+            ['2.5', 3, 5, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['2.5', 3, 5, RoundingMode::Up, '1.35721'],
+            ['2.5', 3, 5, RoundingMode::Down, '1.35720'],
+            ['2.5', 3, 5, RoundingMode::HalfUp, '1.35721'],
+
+            // Non-exact ∛(-2) ≈ -1.25992104989...
+            ['-2', 3, 10, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['-2', 3, 10, RoundingMode::Up, '-1.2599210499'],
+            ['-2', 3, 10, RoundingMode::Down, '-1.2599210498'],
+            ['-2', 3, 10, RoundingMode::HalfUp, '-1.2599210499'],
+            // Scales 5 and 6 where the truncated integer root magnitude ends in 1 and 0,
+            // respectively — the case where the "away-from-zero bump" direction matters for
+            // negative inputs (sub vs add). |r| ends in 9 at scale 10 above, which is the
+            // degenerate case where both directions happen to produce the same rounded answer.
+            ['-2', 3, 5, RoundingMode::Up,     '-1.25993'],
+            ['-2', 3, 5, RoundingMode::Down,   '-1.25992'],
+            ['-2', 3, 5, RoundingMode::HalfUp, '-1.25992'],
+            ['-2', 3, 6, RoundingMode::Up,     '-1.259922'],
+            ['-2', 3, 6, RoundingMode::Down,   '-1.259921'],
+            ['-2', 3, 6, RoundingMode::HalfUp, '-1.259921'],
+
+            // Large scale: ∛3 to 30 digits.
+            ['3', 3, 30, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['3', 3, 30, RoundingMode::Up, '1.442249570307408382321638310781'],
+            ['3', 3, 30, RoundingMode::Down, '1.442249570307408382321638310780'],
+            ['3', 3, 30, RoundingMode::HalfUp, '1.442249570307408382321638310780'],
+
+            // Non-exact integer inputs at scale 0.
+            // ∛17 ≈ 2.5713
+            ['17',  3, 0, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['17',  3, 0, RoundingMode::Down,        '2'],
+            ['17',  3, 0, RoundingMode::Up,          '3'],
+            ['17',  3, 0, RoundingMode::HalfUp,      '3'],
+            // ∛16 ≈ 2.5198
+            ['16',  3, 0, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['16',  3, 0, RoundingMode::Down,        '2'],
+            ['16',  3, 0, RoundingMode::Up,          '3'],
+            ['16',  3, 0, RoundingMode::HalfUp,      '3'],
+            // ∛864 ≈ 9.5224
+            ['864', 3, 0, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['864', 3, 0, RoundingMode::Down,        '9'],
+            ['864', 3, 0, RoundingMode::Up,          '10'],
+            ['864', 3, 0, RoundingMode::HalfUp,      '10'],
+            // ∛-17 ≈ -2.5713
+            ['-17', 3, 0, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['-17', 3, 0, RoundingMode::Down,        '-2'],
+            ['-17', 3, 0, RoundingMode::Up,          '-3'],
+            ['-17', 3, 0, RoundingMode::HalfUp,      '-3'],
+
+            // Tightest possible Half* boundaries, where 2^n·|V| differs from (2·|t|+1)^n by ±1.
+            // V=43, n=3: 2^3·43 = 344 vs 7^3 = 343 (diff +1) → smallest "round up". ∛43 ≈ 3.5034.
+            ['43',  3, 0, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['43',  3, 0, RoundingMode::Down,        '3'],
+            ['43',  3, 0, RoundingMode::Up,          '4'],
+            ['43',  3, 0, RoundingMode::HalfUp,      '4'],
+            // V=91, n=3: 2^3·91 = 728 vs 9^3 = 729 (diff -1) → smallest "round down". ∛91 ≈ 4.4979.
+            ['91',  3, 0, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['91',  3, 0, RoundingMode::Down,        '4'],
+            ['91',  3, 0, RoundingMode::Up,          '5'],
+            ['91',  3, 0, RoundingMode::HalfUp,      '4'],
+
+            ['0.999',  3, 0, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['0.999',  3, 0, RoundingMode::Down,        '0'],
+            ['0.999',  3, 0, RoundingMode::Up,          '1'],
+            ['0.999',  3, 0, RoundingMode::HalfUp,      '1'],
+            ['0.999',  3, 1, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['0.999',  3, 1, RoundingMode::Down,        '0.9'],
+            ['0.999',  3, 1, RoundingMode::Up,          '1.0'],
+            ['0.999',  3, 1, RoundingMode::HalfUp,      '1.0'],
+            ['0.999',  3, 2, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['0.999',  3, 2, RoundingMode::Down,        '0.99'],
+            ['0.999',  3, 2, RoundingMode::Up,          '1.00'],
+            ['0.999',  3, 2, RoundingMode::HalfUp,      '1.00'],
+            ['0.999',  3, 3, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['0.999',  3, 3, RoundingMode::Down,        '0.999'],
+            ['0.999',  3, 3, RoundingMode::Up,          '1.000'],
+            ['0.999',  3, 3, RoundingMode::HalfUp,      '1.000'],
+            ['0.999',  3, 4, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['0.999',  3, 4, RoundingMode::Down,        '0.9996'],
+            ['0.999',  3, 4, RoundingMode::Up,          '0.9997'],
+            ['0.999',  3, 4, RoundingMode::HalfUp,      '0.9997'],
+            ['-0.999', 3, 0, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['-0.999', 3, 0, RoundingMode::Down,        '0'],
+            ['-0.999', 3, 0, RoundingMode::Up,          '-1'],
+            ['-0.999', 3, 0, RoundingMode::HalfUp,      '-1'],
+            ['-0.999', 3, 1, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['-0.999', 3, 1, RoundingMode::Down,        '-0.9'],
+            ['-0.999', 3, 1, RoundingMode::Up,          '-1.0'],
+            ['-0.999', 3, 1, RoundingMode::HalfUp,      '-1.0'],
+            ['-0.999', 3, 2, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['-0.999', 3, 2, RoundingMode::Down,        '-0.99'],
+            ['-0.999', 3, 2, RoundingMode::Up,          '-1.00'],
+            ['-0.999', 3, 2, RoundingMode::HalfUp,      '-1.00'],
+            ['-0.999', 3, 3, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['-0.999', 3, 3, RoundingMode::Down,        '-0.999'],
+            ['-0.999', 3, 3, RoundingMode::Up,          '-1.000'],
+            ['-0.999', 3, 3, RoundingMode::HalfUp,      '-1.000'],
+            ['-0.999', 3, 4, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['-0.999', 3, 4, RoundingMode::Down,        '-0.9996'],
+            ['-0.999', 3, 4, RoundingMode::Up,          '-0.9997'],
+            ['-0.999', 3, 4, RoundingMode::HalfUp,      '-0.9997'],
+
+            // n = 4
+
+            // Perfect 4th powers: 16 = 2^4, 0.0016 = 0.2^4.
+            ['16', 4, 0, RoundingMode::Unnecessary, '2'],
+            ['0.0016', 4, 1, RoundingMode::Unnecessary, '0.2'],
+            ['0.0016', 4, 4, RoundingMode::Unnecessary, '0.2000'],
+            ['0.0016', 4, 0, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+
+            // Non-exact. 8^¼ ≈ 1.6818
+            ['8',   4, 0, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['8',   4, 0, RoundingMode::Down,        '1'],
+            ['8',   4, 0, RoundingMode::Up,          '2'],
+            ['8',   4, 0, RoundingMode::HalfUp,      '2'],
+
+            // Non-exact 4th root of 2 ≈ 1.1892071150027210667...
+            ['2', 4, 10, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['2', 4, 10, RoundingMode::Up, '1.1892071151'],
+            ['2', 4, 10, RoundingMode::Down, '1.1892071150'],
+            ['2', 4, 10, RoundingMode::HalfUp, '1.1892071150'],
+
+            // n = 5
+
+            // Perfect 5th powers: 32 = 2^5, 243 = 3^5, 100000 = 10^5, 0.00032 = 0.2^5.
+            ['32', 5, 0, RoundingMode::Unnecessary, '2'],
+            ['243', 5, 0, RoundingMode::Unnecessary, '3'],
+            ['100000', 5, 2, RoundingMode::Unnecessary, '10.00'],
+            ['0.00032', 5, 1, RoundingMode::Unnecessary, '0.2'],
+            ['0.00032', 5, 5, RoundingMode::Unnecessary, '0.20000'],
+
+            // Non-exact 5th root of 2 ≈ 1.1486983549970350067...
+            ['2', 5, 10, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['2', 5, 10, RoundingMode::Up, '1.1486983550'],
+            ['2', 5, 10, RoundingMode::Down, '1.1486983549'],
+            ['2', 5, 10, RoundingMode::HalfUp, '1.1486983550'],
+
+            // 5th root of negative (odd n): -2^(1/5) ≈ -1.14869835499...
+            ['-2', 5, 10, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['-2', 5, 10, RoundingMode::Up, '-1.1486983550'],
+            ['-2', 5, 10, RoundingMode::Down, '-1.1486983549'],
+            ['-2', 5, 10, RoundingMode::HalfUp, '-1.1486983550'],
+
+            // n = 7
+
+            // Perfect 7th: 128 = 2^7.
+            ['128', 7, 0, RoundingMode::Unnecessary, '2'],
+            ['128', 7, 4, RoundingMode::Unnecessary, '2.0000'],
+
+            // Non-exact 7th root of 2 ≈ 1.1040895136738123820...
+            ['2', 7, 10, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['2', 7, 10, RoundingMode::Up, '1.1040895137'],
+            ['2', 7, 10, RoundingMode::Down, '1.1040895136'],
+            ['2', 7, 10, RoundingMode::HalfUp, '1.1040895137'],
+
+            // n = 100
+
+            // 2^(1/100) ≈ 1.0069555500567188...
+            ['2', 100, 5, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['2', 100, 5, RoundingMode::Up,          '1.00696'],
+            ['2', 100, 5, RoundingMode::Down,        '1.00695'],
+            ['2', 100, 5, RoundingMode::HalfUp,      '1.00696'],
+
+            // 2^100
+            ['1267650600228229401496703205376', 100, 10, RoundingMode::Unnecessary, '2.0000000000'],
+
+            // 2^100 + 1
+            ['1267650600228229401496703205377', 100, 10, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['1267650600228229401496703205377', 100, 10, RoundingMode::Down,        '2.0000000000'],
+            ['1267650600228229401496703205377', 100, 10, RoundingMode::Up,          '2.0000000001'],
+            ['1267650600228229401496703205377', 100, 10, RoundingMode::HalfUp,      '2.0000000000'],
+
+            // 2^100 - 1
+            ['1267650600228229401496703205375', 100, 10, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['1267650600228229401496703205375', 100, 10, RoundingMode::Down,        '1.9999999999'],
+            ['1267650600228229401496703205375', 100, 10, RoundingMode::Up,          '2.0000000000'],
+            ['1267650600228229401496703205375', 100, 10, RoundingMode::HalfUp,      '2.0000000000'],
+
+            // n = 101
+
+            // -(2^101)
+            ['-2535301200456458802993406410752', 101, 10, RoundingMode::Unnecessary, '-2.0000000000'],
+
+            // -(2^101 + 1)
+            ['-2535301200456458802993406410753', 101, 10, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['-2535301200456458802993406410753', 101, 10, RoundingMode::Down,        '-2.0000000000'],
+            ['-2535301200456458802993406410753', 101, 10, RoundingMode::Up,          '-2.0000000001'],
+            ['-2535301200456458802993406410753', 101, 10, RoundingMode::HalfUp,      '-2.0000000000'],
+
+            // -(2^101 - 1)
+            ['-2535301200456458802993406410751', 101, 10, RoundingMode::Unnecessary, 'NTH_ROOT_NOT_EXACT'],
+            ['-2535301200456458802993406410751', 101, 10, RoundingMode::Down,        '-1.9999999999'],
+            ['-2535301200456458802993406410751', 101, 10, RoundingMode::Up,          '-2.0000000000'],
+            ['-2535301200456458802993406410751', 101, 10, RoundingMode::HalfUp,      '-2.0000000000'],
+        ];
+
+        foreach ($tests as [$number, $n, $scale, $roundingMode, $expected]) {
+            yield [$number, $n, $scale, $roundingMode, $expected];
+
+            $isExpectedException = in_array($expected, [
+                'NTH_ROOT_NOT_EXACT',
+                'SCALE_TOO_SMALL',
+            ], true);
+
+            // No row here is at a midpoint tie, so HalfUp can expand to every other Half* mode.
+            // Tie cases live in providerNthRootMidpointTies with their own narrower expansion.
+            $eqs = match ($roundingMode) {
+                RoundingMode::Unnecessary => $isExpectedException ? [] : self::ALL_ROUNDING_MODES_BUT_UNNECESSARY,
+                RoundingMode::Up => ($number[0] === '-') ? [RoundingMode::Floor] : [RoundingMode::Ceiling],
+                RoundingMode::Down => ($number[0] === '-') ? [RoundingMode::Ceiling] : [RoundingMode::Floor],
+                RoundingMode::HalfUp => [
+                    RoundingMode::HalfDown,
+                    RoundingMode::HalfCeiling,
+                    RoundingMode::HalfFloor,
+                    RoundingMode::HalfEven,
+                    RoundingMode::HalfOdd,
+                ],
+            };
+
+            foreach ($eqs as $eq) {
+                yield [$number, $n, $scale, $eq, $expected];
+            }
+        }
+    }
+
+    /**
+     * Replays the entire providerSqrt dataset at n=2, verifying that nthRoot(2) matches sqrt()
+     * semantics across every case sqrt is tested on. Any future addition to providerSqrt
+     * automatically extends nthRoot(2) coverage too.
+     */
+    public static function providerNthRootFromSqrt(): Generator
+    {
+        foreach (self::providerSqrt() as [$number, $scale, $roundingMode, $expected]) {
+            if ($expected === 'SQRT_NOT_EXACT') {
+                $expected = 'NTH_ROOT_NOT_EXACT';
+            }
+
+            yield [$number, 2, $scale, $roundingMode, $expected];
+        }
+    }
+
+    /**
+     * Replays providerSqrtMidpointTies at n=2 to give nthRoot(2) midpoint-tie coverage.
+     */
+    public static function providerNthRootMidpointTiesFromSqrt(): Generator
+    {
+        foreach (self::providerSqrtMidpointTies() as [$number, $scale, $roundingMode, $expected]) {
+            yield [$number, 2, $scale, $roundingMode, $expected];
+        }
+    }
+
+    /**
+     * Midpoint-tie cases: each Half* mode gives a different answer, so all are listed explicitly.
+     * Equivalences are only provided for Up/Down ↔ Ceiling/Floor.
+     */
+    public static function providerNthRootMidpointTies(): Generator
+    {
+        $tests = [
+            // n = 1 identity at a tie: 1.25 doesn't fit at scale 1; midpoint between 1.2 and 1.3.
+            ['1.25', 1, 1, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['1.25', 1, 1, RoundingMode::Down,        '1.2'],
+            ['1.25', 1, 1, RoundingMode::Up,          '1.3'],
+            ['1.25', 1, 1, RoundingMode::HalfUp,      '1.3'],
+            ['1.25', 1, 1, RoundingMode::HalfDown,    '1.2'],
+            ['1.25', 1, 1, RoundingMode::HalfEven,    '1.2'],
+            ['1.25', 1, 1, RoundingMode::HalfOdd,     '1.3'],
+            ['1.25', 1, 1, RoundingMode::HalfCeiling, '1.3'],
+            ['1.25', 1, 1, RoundingMode::HalfFloor,   '1.2'],
+
+            // ∛0.125 = 0.5 → tie between 0 and 1.
+            ['0.125',  3, 0, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['0.125',  3, 0, RoundingMode::Down,        '0'],
+            ['0.125',  3, 0, RoundingMode::Up,          '1'],
+            ['0.125',  3, 0, RoundingMode::HalfUp,      '1'],
+            ['0.125',  3, 0, RoundingMode::HalfDown,    '0'],
+            ['0.125',  3, 0, RoundingMode::HalfEven,    '0'],
+            ['0.125',  3, 0, RoundingMode::HalfOdd,     '1'],
+            ['0.125',  3, 0, RoundingMode::HalfCeiling, '1'],
+            ['0.125',  3, 0, RoundingMode::HalfFloor,   '0'],
+
+            // ∛3.375 = 1.5 → tie between 1 (odd) and 2 (even); HalfEven picks 2, HalfOdd picks 1.
+            ['3.375',  3, 0, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['3.375',  3, 0, RoundingMode::Down,        '1'],
+            ['3.375',  3, 0, RoundingMode::Up,          '2'],
+            ['3.375',  3, 0, RoundingMode::HalfUp,      '2'],
+            ['3.375',  3, 0, RoundingMode::HalfDown,    '1'],
+            ['3.375',  3, 0, RoundingMode::HalfEven,    '2'],
+            ['3.375',  3, 0, RoundingMode::HalfOdd,     '1'],
+            ['3.375',  3, 0, RoundingMode::HalfCeiling, '2'],
+            ['3.375',  3, 0, RoundingMode::HalfFloor,   '1'],
+
+            // ∛-0.125 = -0.5 → tie between -1 and 0.
+            ['-0.125', 3, 0, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['-0.125', 3, 0, RoundingMode::Down,        '0'],
+            ['-0.125', 3, 0, RoundingMode::Up,          '-1'],
+            ['-0.125', 3, 0, RoundingMode::HalfUp,      '-1'],
+            ['-0.125', 3, 0, RoundingMode::HalfDown,    '0'],
+            ['-0.125', 3, 0, RoundingMode::HalfEven,    '0'],
+            ['-0.125', 3, 0, RoundingMode::HalfOdd,     '-1'],
+            ['-0.125', 3, 0, RoundingMode::HalfCeiling, '0'],
+            ['-0.125', 3, 0, RoundingMode::HalfFloor,   '-1'],
+
+            // ∛-3.375 = -1.5 → tie between -2 (even) and -1 (odd); HalfEven picks -2, HalfOdd picks -1.
+            ['-3.375', 3, 0, RoundingMode::Unnecessary, 'SCALE_TOO_SMALL'],
+            ['-3.375', 3, 0, RoundingMode::Down,        '-1'],
+            ['-3.375', 3, 0, RoundingMode::Up,          '-2'],
+            ['-3.375', 3, 0, RoundingMode::HalfUp,      '-2'],
+            ['-3.375', 3, 0, RoundingMode::HalfDown,    '-1'],
+            ['-3.375', 3, 0, RoundingMode::HalfEven,    '-2'],
+            ['-3.375', 3, 0, RoundingMode::HalfOdd,     '-1'],
+            ['-3.375', 3, 0, RoundingMode::HalfCeiling, '-1'],
+            ['-3.375', 3, 0, RoundingMode::HalfFloor,   '-2'],
+        ];
+
+        foreach ($tests as [$number, $n, $scale, $roundingMode, $expected]) {
+            yield [$number, $n, $scale, $roundingMode, $expected];
+
+            $eqs = match ($roundingMode) {
+                RoundingMode::Up => ($number[0] === '-') ? [RoundingMode::Floor] : [RoundingMode::Ceiling],
+                RoundingMode::Down => ($number[0] === '-') ? [RoundingMode::Ceiling] : [RoundingMode::Floor],
+                default => [],
+            };
+
+            foreach ($eqs as $eq) {
+                yield [$number, $n, $scale, $eq, $expected];
+            }
+        }
+    }
+
+    public function testNthRootOfNegativeNumberWithEvenDegree(): void
+    {
+        $number = BigDecimal::of(-1);
+        $this->expectException(NegativeNumberException::class);
+        $this->expectExceptionMessageExact('Cannot take an even nth root of a negative number.');
+
+        $number->nthRoot(2, 0);
+    }
+
+    public function testNthRootOfNegativeNumberWithLargeEvenDegree(): void
+    {
+        $number = BigDecimal::of('-1.5');
+        $this->expectException(NegativeNumberException::class);
+        $this->expectExceptionMessageExact('Cannot take an even nth root of a negative number.');
+
+        $number->nthRoot(100, 10);
+    }
+
+    public function testNthRootWithZeroDegree(): void
+    {
+        $number = BigDecimal::of('1.5');
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('The degree of an nth root must be a positive integer.');
+
+        // @phpstan-ignore argument.type
+        $number->nthRoot(0, 10);
+    }
+
+    public function testNthRootWithNegativeDegree(): void
+    {
+        $number = BigDecimal::of('1.5');
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('The degree of an nth root must be a positive integer.');
+
+        // @phpstan-ignore argument.type
+        $number->nthRoot(-2, 10);
+    }
+
+    public function testNthRootWithNegativeScale(): void
+    {
+        $number = BigDecimal::one();
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('The scale must not be negative.');
+
+        // @phpstan-ignore argument.type
+        $number->nthRoot(3, -1);
+    }
+
+    #[DataProvider('providerClamp')]
+    public function testClamp(string $number, string $min, string $max, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::of($number)->clamp($min, $max));
+    }
+
+    public static function providerClamp(): array
+    {
+        return [
+            ['1.00', '0.50', '1.50', '1.00'],
+            ['0.25', '0.50', '1.50', '0.50'],
+            ['2.00', '0.50', '1.50', '1.50'],
+            ['0.50', '0.50', '1.50', '0.50'],
+            ['1.50', '0.50', '1.50', '1.50'],
+            ['0.00', '0.50', '1.50', '0.50'],
+            ['1.00', '0.50', '1.50', '1.00'],
+            ['0.25', '0.00', '0.50', '0.25'],
+            ['-1.00', '0.50', '1.50', '0.50'],
+            ['-1.00', '-1.50', '-0.50', '-1.00'],
+        ];
+    }
+
+    public function testClampWithInvertedBoundsThrowsException(): void
+    {
+        $number = BigDecimal::of('1.0');
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('The minimum value must be less than or equal to the maximum value.');
+
+        $number->clamp('1.5', '0.5');
+    }
+
+    /**
+     * @param string           $number   The base number.
+     * @param non-negative-int $exponent The exponent to apply.
+     * @param string           $expected The expected result.
+     */
+    #[DataProvider('providerPower')]
+    public function testPower(string $number, int $exponent, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::of($number)->power($exponent));
+    }
+
+    public static function providerPower(): array
+    {
+        return [
+            ['-3', 0, '1'],
+            ['-2', 0, '1'],
+            ['-1', 0, '1'],
+            ['0', 0, '1'],
+            ['1', 0, '1'],
+            ['2', 0, '1'],
+            ['3', 0, '1'],
+
+            ['-3', 1, '-3'],
+            ['-2', 1, '-2'],
+            ['-1', 1, '-1'],
+            ['0', 1, '0'],
+            ['1', 1, '1'],
+            ['2', 1, '2'],
+            ['3', 1, '3'],
+
+            ['-3', 2, '9'],
+            ['-2', 2, '4'],
+            ['-1', 2, '1'],
+            ['0', 2, '0'],
+            ['1', 2, '1'],
+            ['2', 2, '4'],
+            ['3', 2, '9'],
+
+            ['-3', 3, '-27'],
+            ['-2', 3, '-8'],
+            ['-1', 3, '-1'],
+            ['0', 3, '0'],
+            ['1', 3, '1'],
+            ['2', 3, '8'],
+            ['3', 3, '27'],
+
+            ['0', 1000000, '0'],
+            ['1', 1000000, '1'],
+
+            ['-2', 255, '-57896044618658097711785492504343953926634992332820282019728792003956564819968'],
+            ['2', 256, '115792089237316195423570985008687907853269984665640564039457584007913129639936'],
+
+            ['-1.23', 0, '1'],
+            ['-1.23', 0, '1'],
+            ['-1.23', 33, '-926.549609804623448265268294182900512918058893428212027689876489708283'],
+            ['1.23', 34, '1139.65602005968684136628000184496763088921243891670079405854808234118809'],
+
+            ['-123456789', 8, '53965948844821664748141453212125737955899777414752273389058576481'],
+            ['9876543210', 7, '9167159269868350921847491739460569765344716959834325922131706410000000'],
+        ];
+    }
+
+    public function testPowerWithNegativeExponentThrowsException(): void
+    {
+        $one = BigDecimal::one();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('The exponent must not be negative.');
+
+        // @phpstan-ignore argument.type
+        $one->power(-1);
+    }
+
+    /**
+     * @param string           $number       The number to scale.
+     * @param non-negative-int $toScale      The scale to apply.
+     * @param RoundingMode     $roundingMode The rounding mode to apply.
+     * @param string|null      $expected     The expected result, or null if an exception is expected.
+     */
+    #[DataProvider('providerToScale')]
+    public function testToScale(string $number, int $toScale, RoundingMode $roundingMode, ?string $expected): void
+    {
+        $decimal = BigDecimal::of($number);
+
+        if ($expected === null) {
+            $this->expectException(RoundingNecessaryException::class);
+            $this->expectExceptionMessageExact('This decimal number cannot be represented at the requested scale without rounding.');
+        }
+
+        $decimal = $decimal->toScale($toScale, $roundingMode);
+
+        if ($expected !== null) {
+            self::assertBigDecimalEquals($expected, $decimal);
+        }
+    }
+
+    public static function providerToScale(): array
+    {
+        return [
+            ['0', 0, RoundingMode::Unnecessary, '0'],
+            ['0', 1, RoundingMode::Unnecessary, '0.0'],
+            ['0.0', 0, RoundingMode::Unnecessary, '0'],
+            ['0.0', 1, RoundingMode::Unnecessary, '0.0'],
+            ['0.0', 2, RoundingMode::Unnecessary, '0.00'],
+            ['0.01', 0, RoundingMode::Unnecessary, null],
+            ['0.01', 1, RoundingMode::Unnecessary, null],
+            ['0.01', 2, RoundingMode::Unnecessary, '0.01'],
+            ['0.01', 3, RoundingMode::Unnecessary, '0.010'],
+            ['0.01', 0, RoundingMode::Down, '0'],
+            ['0.01', 0, RoundingMode::Up, '1'],
+            ['0.01', 1, RoundingMode::Down, '0.0'],
+            ['0.01', 1, RoundingMode::Up, '0.1'],
+            ['0.01', 1, RoundingMode::Unnecessary, null],
+            ['123.45', 0, RoundingMode::Down, '123'],
+            ['123.45', 0, RoundingMode::Up, '124'],
+            ['123.45', 1, RoundingMode::Down, '123.4'],
+            ['123.45', 1, RoundingMode::Up, '123.5'],
+            ['123.45', 2, RoundingMode::Unnecessary, '123.45'],
+            ['123.45', 5, RoundingMode::Unnecessary, '123.45000'],
+            ['-12.3400', 2, RoundingMode::Unnecessary, '-12.34'],
+            ['-120.00', 0, RoundingMode::Unnecessary, '-120'],
+        ];
+    }
+
+    public function testToScaleWithNegativeScale(): void
+    {
+        $number = BigDecimal::of('1.2');
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('The scale must not be negative.');
+
+        // @phpstan-ignore argument.type
+        $number->toScale(-1);
+    }
+
+    /**
+     * @param string $number   The decimal number as a string.
+     * @param int    $places   The number of decimal places to move left.
+     * @param string $expected The expected result.
+     */
+    #[DataProvider('providerWithPointMovedLeft')]
+    public function testWithPointMovedLeft(string $number, int $places, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::of($number)->withPointMovedLeft($places));
+    }
+
+    public static function providerWithPointMovedLeft(): array
+    {
+        return [
+            ['0', -2, '0'],
+            ['0', -1, '0'],
+            ['0', 0, '0'],
+            ['0', 1, '0.0'],
+            ['0', 2, '0.00'],
+
+            ['0.0', -2, '0'],
+            ['0.0', -1, '0'],
+            ['0.0', 0, '0.0'],
+            ['0.0', 1, '0.00'],
+            ['0.0', 2, '0.000'],
+
+            ['1', -2, '100'],
+            ['1', -1, '10'],
+            ['1', 0, '1'],
+            ['1', 1, '0.1'],
+            ['1', 2, '0.01'],
+
+            ['12', -2, '1200'],
+            ['12', -1, '120'],
+            ['12', 0, '12'],
+            ['12', 1, '1.2'],
+            ['12', 2, '0.12'],
+
+            ['1.1', -2, '110'],
+            ['1.1', -1, '11'],
+            ['1.1', 0, '1.1'],
+            ['1.1', 1, '0.11'],
+            ['1.1', 2, '0.011'],
+
+            ['0.1', -2, '10'],
+            ['0.1', -1, '1'],
+            ['0.1', 0, '0.1'],
+            ['0.1', 1, '0.01'],
+            ['0.1', 2, '0.001'],
+
+            ['0.01', -2, '1'],
+            ['0.01', -1, '0.1'],
+            ['0.01', 0, '0.01'],
+            ['0.01', 1, '0.001'],
+            ['0.01', 2, '0.0001'],
+
+            ['-9', -2, '-900'],
+            ['-9', -1, '-90'],
+            ['-9', 0, '-9'],
+            ['-9', 1, '-0.9'],
+            ['-9', 2, '-0.09'],
+
+            ['-0.9', -2, '-90'],
+            ['-0.9', -1, '-9'],
+            ['-0.9', 0, '-0.9'],
+            ['-0.9', 1, '-0.09'],
+            ['-0.9', 2, '-0.009'],
+
+            ['-0.09', -2, '-9'],
+            ['-0.09', -1, '-0.9'],
+            ['-0.09', 0, '-0.09'],
+            ['-0.09', 1, '-0.009'],
+            ['-0.09', 2, '-0.0009'],
+
+            ['-12.3', -2, '-1230'],
+            ['-12.3', -1, '-123'],
+            ['-12.3', 0, '-12.3'],
+            ['-12.3', 1, '-1.23'],
+            ['-12.3', 2, '-0.123'],
+        ];
+    }
+
+    /**
+     * @param string $number   The decimal number as a string.
+     * @param int    $places   The number of decimal places to move right.
+     * @param string $expected The expected result.
+     */
+    #[DataProvider('providerWithPointMovedRight')]
+    public function testWithPointMovedRight(string $number, int $places, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::of($number)->withPointMovedRight($places));
+    }
+
+    public static function providerWithPointMovedRight(): array
+    {
+        return [
+            ['0', -2, '0.00'],
+            ['0', -1, '0.0'],
+            ['0', 0, '0'],
+            ['0', 1, '0'],
+            ['0', 2, '0'],
+
+            ['0.0', -2, '0.000'],
+            ['0.0', -1, '0.00'],
+            ['0.0', 0, '0.0'],
+            ['0.0', 1, '0'],
+            ['0.0', 2, '0'],
+
+            ['9', -2, '0.09'],
+            ['9', -1, '0.9'],
+            ['9', 0, '9'],
+            ['9', 1, '90'],
+            ['9', 2, '900'],
+
+            ['89', -2, '0.89'],
+            ['89', -1, '8.9'],
+            ['89', 0, '89'],
+            ['89', 1, '890'],
+            ['89', 2, '8900'],
+
+            ['8.9', -2, '0.089'],
+            ['8.9', -1, '0.89'],
+            ['8.9', 0, '8.9'],
+            ['8.9', 1, '89'],
+            ['8.9', 2, '890'],
+
+            ['0.9', -2, '0.009'],
+            ['0.9', -1, '0.09'],
+            ['0.9', 0, '0.9'],
+            ['0.9', 1, '9'],
+            ['0.9', 2, '90'],
+
+            ['0.09', -2, '0.0009'],
+            ['0.09', -1, '0.009'],
+            ['0.09', 0, '0.09'],
+            ['0.09', 1, '0.9'],
+            ['0.09', 2, '9'],
+
+            ['-1', -2, '-0.01'],
+            ['-1', -1, '-0.1'],
+            ['-1', 0, '-1'],
+            ['-1', 1, '-10'],
+            ['-1', 2, '-100'],
+
+            ['-0.1', -2, '-0.001'],
+            ['-0.1', -1, '-0.01'],
+            ['-0.1', 0, '-0.1'],
+            ['-0.1', 1, '-1'],
+            ['-0.1', 2, '-10'],
+
+            ['-0.01', -2, '-0.0001'],
+            ['-0.01', -1, '-0.001'],
+            ['-0.01', 0, '-0.01'],
+            ['-0.01', 1, '-0.1'],
+            ['-0.01', 2, '-1'],
+
+            ['-12.3', -2, '-0.123'],
+            ['-12.3', -1, '-1.23'],
+            ['-12.3', 0, '-12.3'],
+            ['-12.3', 1, '-123'],
+            ['-12.3', 2, '-1230'],
+        ];
+    }
+
+    /**
+     * @param string $number   The number to trim.
+     * @param string $expected The expected result.
+     */
+    #[DataProvider('providerStrippedOfTrailingZeros')]
+    public function testStrippedOfTrailingZeros(string $number, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::of($number)->strippedOfTrailingZeros());
+    }
+
+    public static function providerStrippedOfTrailingZeros(): array
+    {
+        return [
+            ['0', '0'],
+            ['0.0', '0'],
+            ['0.00', '0'],
+            ['0.000', '0'],
+            ['0.1', '0.1'],
+            ['0.01', '0.01'],
+            ['0.001', '0.001'],
+            ['0.100', '0.1'],
+            ['0.0100', '0.01'],
+            ['0.00100', '0.001'],
+            ['1', '1'],
+            ['1.0', '1'],
+            ['1.00', '1'],
+            ['1.10', '1.1'],
+            ['1.123000', '1.123'],
+            ['10', '10'],
+            ['10.0', '10'],
+            ['10.00', '10'],
+            ['10.10', '10.1'],
+            ['10.01', '10.01'],
+            ['10.010', '10.01'],
+            ['100', '100'],
+            ['100.0', '100'],
+            ['100.00', '100'],
+            ['100.01', '100.01'],
+            ['100.10', '100.1'],
+            ['100.010', '100.01'],
+            ['100.100', '100.1'],
+        ];
+    }
+
+    /**
+     * @param string $number   The number as a string.
+     * @param string $expected The expected absolute result.
+     */
+    #[DataProvider('providerAbs')]
+    public function testAbs(string $number, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::of($number)->abs());
+    }
+
+    public static function providerAbs(): array
+    {
+        return [
+            ['123', '123'],
+            ['-123', '123'],
+            ['123.456', '123.456'],
+            ['-123.456', '123.456'],
+        ];
+    }
+
+    /**
+     * @param string $number   The number to negate as a string.
+     * @param string $expected The expected result.
+     */
+    #[DataProvider('providerNegated')]
+    public function testNegated(string $number, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::of($number)->negated());
+    }
+
+    public static function providerNegated(): array
+    {
+        return [
+            ['123', '-123'],
+            ['-123', '123'],
+            ['123.456', '-123.456'],
+            ['-123.456', '123.456'],
+        ];
+    }
+
+    /**
+     * @param string     $a The base number as a string.
+     * @param int|string $b The number to compare to.
+     * @param int        $c The comparison result.
+     */
+    #[DataProvider('providerCompareTo')]
+    public function testCompareTo(string $a, int|string $b, int $c): void
+    {
+        self::assertSame($c, BigDecimal::of($a)->compareTo($b));
+    }
+
+    /**
+     * @param string     $a The base number as a string.
+     * @param int|string $b The number to compare to.
+     * @param int        $c The comparison result.
+     */
+    #[DataProvider('providerCompareTo')]
+    public function testIsEqualTo(string $a, int|string $b, int $c): void
+    {
+        self::assertSame($c === 0, BigDecimal::of($a)->isEqualTo($b));
+    }
+
+    /**
+     * @param string     $a The base number as a string.
+     * @param int|string $b The number to compare to.
+     * @param int        $c The comparison result.
+     */
+    #[DataProvider('providerCompareTo')]
+    public function testIsLessThan(string $a, int|string $b, int $c): void
+    {
+        self::assertSame($c < 0, BigDecimal::of($a)->isLessThan($b));
+    }
+
+    /**
+     * @param string     $a The base number as a string.
+     * @param int|string $b The number to compare to.
+     * @param int        $c The comparison result.
+     */
+    #[DataProvider('providerCompareTo')]
+    public function testIsLessThanOrEqualTo(string $a, int|string $b, int $c): void
+    {
+        self::assertSame($c <= 0, BigDecimal::of($a)->isLessThanOrEqualTo($b));
+    }
+
+    /**
+     * @param string     $a The base number as a string.
+     * @param int|string $b The number to compare to.
+     * @param int        $c The comparison result.
+     */
+    #[DataProvider('providerCompareTo')]
+    public function testIsGreaterThan(string $a, int|string $b, int $c): void
+    {
+        self::assertSame($c > 0, BigDecimal::of($a)->isGreaterThan($b));
+    }
+
+    /**
+     * @param string     $a The base number as a string.
+     * @param int|string $b The number to compare to.
+     * @param int        $c The comparison result.
+     */
+    #[DataProvider('providerCompareTo')]
+    public function testIsGreaterThanOrEqualTo(string $a, int|string $b, int $c): void
+    {
+        self::assertSame($c >= 0, BigDecimal::of($a)->isGreaterThanOrEqualTo($b));
+    }
+
+    public static function providerCompareTo(): array
+    {
+        return [
+            ['123', '123',  0],
+            ['123', '456', -1],
+            ['456', '123',  1],
+            ['456', '456',  0],
+
+            ['-123', '-123',  0],
+            ['-123',  '456', -1],
+            ['456', '-123',  1],
+            ['456',  '456',  0],
+
+            ['123',  '123',  0],
+            ['123', '-456',  1],
+            ['-456',  '123', -1],
+            ['-456',  '456', -1],
+
+            ['-123', '-123',  0],
+            ['-123', '-456',  1],
+            ['-456', '-123', -1],
+            ['-456', '-456',  0],
+
+            ['123.000000000000000000000000000000000000000000000', '123',  0],
+            ['123.000000000000000000000000000000000000000000001', '123',  1],
+            ['122.999999999999999999999999999999999999999999999', '123', -1],
+
+            ['123.0', '123.000000000000000000000000000000000000000000000',  0],
+            ['123.0', '123.000000000000000000000000000000000000000000001', -1],
+            ['123.0', '122.999999999999999999999999999999999999999999999',  1],
+
+            ['-0.000000000000000000000000000000000000000000000000001', '0', -1],
+            ['0.000000000000000000000000000000000000000000000000001', '0',  1],
+            ['0.000000000000000000000000000000000000000000000000000', '0',  0],
+
+            ['0', '-0.000000000000000000000000000000000000000000000000001',  1],
+            ['0',  '0.000000000000000000000000000000000000000000000000001', -1],
+            ['0',  '0.000000000000000000000000000000000000000000000000000',  0],
+
+            ['123.9999999999999999999999999999999999999', 124, -1],
+            ['124.0000000000000000000000000000000000000', '124', 0],
+            ['124.0000000000000000000000000000000000001', '124.0', 1],
+
+            ['123.9999999999999999999999999999999999999', '1508517100733469660019804/12165460489786045645321', -1],
+            ['124.0000000000000000000000000000000000000', '1508517100733469660019804/12165460489786045645321', 0],
+            ['124.0000000000000000000000000000000000001', '1508517100733469660019804/12165460489786045645321', 1],
+        ];
+    }
+
+    /**
+     * @param int|string $number The number to test.
+     * @param int        $sign   The sign of the number.
+     */
+    #[DataProvider('providerSign')]
+    public function testGetSign(int|string $number, int $sign): void
+    {
+        self::assertSame($sign, BigDecimal::of($number)->getSign());
+    }
+
+    /**
+     * @param int|string $number The number to test.
+     * @param int        $sign   The sign of the number.
+     */
+    #[DataProvider('providerSign')]
+    public function testIsZero(int|string $number, int $sign): void
+    {
+        self::assertSame($sign === 0, BigDecimal::of($number)->isZero());
+    }
+
+    /**
+     * @param int|string $number The number to test.
+     * @param int        $sign   The sign of the number.
+     */
+    #[DataProvider('providerSign')]
+    public function testIsNegative(int|string $number, int $sign): void
+    {
+        self::assertSame($sign < 0, BigDecimal::of($number)->isNegative());
+    }
+
+    /**
+     * @param int|string $number The number to test.
+     * @param int        $sign   The sign of the number.
+     */
+    #[DataProvider('providerSign')]
+    public function testIsNegativeOrZero(int|string $number, int $sign): void
+    {
+        self::assertSame($sign <= 0, BigDecimal::of($number)->isNegativeOrZero());
+    }
+
+    /**
+     * @param int|string $number The number to test.
+     * @param int        $sign   The sign of the number.
+     */
+    #[DataProvider('providerSign')]
+    public function testIsPositive(int|string $number, int $sign): void
+    {
+        self::assertSame($sign > 0, BigDecimal::of($number)->isPositive());
+    }
+
+    /**
+     * @param int|string $number The number to test.
+     * @param int        $sign   The sign of the number.
+     */
+    #[DataProvider('providerSign')]
+    public function testIsPositiveOrZero(int|string $number, int $sign): void
+    {
+        self::assertSame($sign >= 0, BigDecimal::of($number)->isPositiveOrZero());
+    }
+
+    public static function providerSign(): array
+    {
+        return [
+            [0,  0],
+            [-0,  0],
+            [1,  1],
+            [-1, -1],
+
+            [PHP_INT_MAX, 1],
+            [PHP_INT_MIN, -1],
+
+            ['1.0',  1],
+            ['-1.0', -1],
+            ['0.1',  1],
+            ['-0.1', -1],
+            ['0.0',  0],
+            ['-0.0',  0],
+
+            ['1.00',  1],
+            ['-1.00', -1],
+            ['0.10',  1],
+            ['-0.10', -1],
+            ['0.01',  1],
+            ['-0.01', -1],
+            ['0.00',  0],
+            ['-0.00',  0],
+
+            ['0.000000000000000000000000000000000000000000000000000000000000000000000000000001',  1],
+            ['0.000000000000000000000000000000000000000000000000000000000000000000000000000000',  0],
+            ['-0.000000000000000000000000000000000000000000000000000000000000000000000000000001', -1],
+        ];
+    }
+
+    #[DataProvider('providerGetPrecision')]
+    public function testGetPrecision(string $number, int $precision): void
+    {
+        self::assertSame($precision, BigDecimal::of($number)->getPrecision());
+        self::assertSame($precision, BigDecimal::of($number)->negated()->getPrecision());
+    }
+
+    public static function providerGetPrecision(): array
+    {
+        return [
+            ['0', 1],
+            ['0.0', 1],
+            ['0.00', 1],
+            ['1', 1],
+            ['12', 2],
+            ['123', 3],
+            ['1.2', 2],
+            ['1.20', 3],
+            ['1.23', 3],
+            ['1.230', 4],
+            ['123.456', 6],
+            ['0.123', 3],
+            ['0.1230', 4],
+            ['0.12300', 5],
+            ['0.0123', 3],
+            ['0.01230', 4],
+            ['0.012300', 5],
+            ['0.00123', 3],
+            ['0.001230', 4],
+            ['0.0012300', 5],
+            ['1234567890.12345678901234567890123456789012345678901234567890', 60],
+            ['0.0000000000000000000000000000000000000000000000000000000000012345', 5],
+            ['0.00000000000000000000000000000000000000000000000000000000000123450', 6],
+            ['123000', 6],
+            ['123000.0', 7],
+            ['123000.01', 8],
+            ['123000.010', 9],
+        ];
+    }
+
+    /**
+     * @param string $number         The decimal number to test.
+     * @param string $integralPart   The expected integral part.
+     * @param string $fractionalPart The expected fractional part.
+     */
+    #[DataProvider('providerGetIntegralPartAndFractionalPart')]
+    public function testGetIntegralPartAndFractionalPart(string $number, string $integralPart, string $fractionalPart): void
+    {
+        $decimal = BigDecimal::of($number);
+
+        self::assertBigIntegerEquals($integralPart, $decimal->getIntegralPart());
+        self::assertBigDecimalEquals($fractionalPart, $decimal->getFractionalPart());
+        self::assertTrue($decimal->isEqualTo($decimal->getFractionalPart()->plus($decimal->getIntegralPart())));
+    }
+
+    public static function providerGetIntegralPartAndFractionalPart(): array
+    {
+        return [
+            ['0', '0', '0'],
+            ['0.1', '0', '0.1'],
+            ['1', '1', '0'],
+            ['1.0', '1', '0.0'],
+            ['1.99', '1', '0.99'],
+            ['-1', '-1', '0'],
+            ['-1.0', '-1', '0.0'],
+            ['-1.99', '-1', '-0.99'],
+            ['123.456', '123', '0.456'],
+            ['-123.456', '-123', '-0.456'],
+            ['0.001', '0', '0.001'],
+            ['-0.001', '0', '-0.001'],
+            ['999999999999999999999999999999.999999999999999999999999999999', '999999999999999999999999999999', '0.999999999999999999999999999999'],
+            ['-999999999999999999999999999999.999999999999999999999999999999', '-999999999999999999999999999999', '-0.999999999999999999999999999999'],
+        ];
+    }
+
+    /**
+     * @param string $decimal  The number to convert.
+     * @param string $expected The expected value.
+     */
+    #[DataProvider('providerToBigInteger')]
+    public function testToBigInteger(string $decimal, string $expected): void
+    {
+        self::assertBigIntegerEquals($expected, BigDecimal::of($decimal)->toBigInteger());
+    }
+
+    public static function providerToBigInteger(): array
+    {
+        return [
+            ['0', '0'],
+            ['1', '1'],
+            ['0.0', '0'],
+            ['1.0', '1'],
+            ['-45646540654984984654165151654557478978940.0000000000000', '-45646540654984984654165151654557478978940'],
+        ];
+    }
+
+    /**
+     * @param string $number A decimal number with a non-zero fractional part.
+     */
+    #[DataProvider('providerToBigIntegerThrowsExceptionWhenRoundingNecessary')]
+    public function testToBigIntegerThrowsExceptionWhenRoundingNecessary(string $number): void
+    {
+        $number = BigDecimal::of($number);
+
+        $this->expectException(RoundingNecessaryException::class);
+        $this->expectExceptionMessageExact('This decimal number cannot be represented as an integer without rounding.');
+
+        $number->toBigInteger();
+    }
+
+    public static function providerToBigIntegerThrowsExceptionWhenRoundingNecessary(): array
+    {
+        return [
+            ['0.1'],
+            ['-0.1'],
+            ['0.01'],
+            ['-0.01'],
+            ['1.002'],
+            ['0.001'],
+            ['-1.002'],
+            ['-0.001'],
+            ['-45646540654984984654165151654557478978940.0000000000001'],
+        ];
+    }
+
+    public function testToBigDecimal(): void
+    {
+        $decimal = BigDecimal::of('123.456');
+        self::assertSame($decimal, $decimal->toBigDecimal());
+    }
+
+    /**
+     * @param string $decimal  The decimal number to test.
+     * @param string $rational The expected rational number.
+     */
+    #[DataProvider('providerToBigRational')]
+    public function testToBigRational(string $decimal, string $rational): void
+    {
+        self::assertBigRationalEquals($rational, BigDecimal::of($decimal)->toBigRational());
+    }
+
+    public static function providerToBigRational(): array
+    {
+        return [
+            ['0', '0'],
+            ['1', '1'],
+            ['-1', '-1'],
+
+            ['0.0', '0'],
+            ['1.0', '1'],
+            ['-1.0', '-1'],
+
+            ['0.5', '1/2'],
+            ['0.25', '1/4'],
+            ['0.2', '1/5'],
+            ['0.0375', '3/80'],
+
+            ['0.00', '0'],
+            ['1.00', '1'],
+            ['-1.00', '-1'],
+
+            ['0.9', '9/10'],
+            ['0.90', '9/10'],
+            ['0.900', '9/10'],
+
+            ['0.10', '1/10'],
+            ['0.11', '11/100'],
+            ['0.99', '99/100'],
+            ['0.990', '99/100'],
+            ['0.9900', '99/100'],
+
+            ['1.01', '101/100'],
+            ['-1.001', '-1001/1000'],
+            ['-1.010', '-101/100'],
+
+            ['77867087546465423456465427464560454054654.4211684848', '48666929716540889660290892165350283784159013230303/625000000'],
+        ];
+    }
+
+    /**
+     * @param int $number The decimal number to test.
+     */
+    #[DataProvider('providerToInt')]
+    public function testToInt(int $number): void
+    {
+        self::assertSame($number, BigDecimal::of($number)->toInt());
+        self::assertSame($number, BigDecimal::of($number . '.0')->toInt());
+    }
+
+    public static function providerToInt(): array
+    {
+        return [
+            [PHP_INT_MIN],
+            [-123456789],
+            [-1],
+            [0],
+            [1],
+            [123456789],
+            [PHP_INT_MAX],
+        ];
+    }
+
+    #[DataProvider('providerToIntThrowsIntegerOverflowException')]
+    public function testToIntThrowsIntegerOverflowException(string $number): void
+    {
+        $decimal = BigDecimal::of($number);
+
+        $this->expectException(IntegerOverflowException::class);
+        $this->expectExceptionMessageExact(sprintf('%s is out of range [%d, %d] and cannot be represented as an integer.', $number, PHP_INT_MIN, PHP_INT_MAX));
+
+        $decimal->toInt();
+    }
+
+    public static function providerToIntThrowsIntegerOverflowException(): array
+    {
+        return [
+            ['-999999999999999999999999999999'],
+            ['9999999999999999999999999999999'],
+        ];
+    }
+
+    #[DataProvider('providerToIntThrowsRoundingNecessaryException')]
+    public function testToIntThrowsRoundingNecessaryException(string $number): void
+    {
+        $number = BigDecimal::of($number);
+
+        $this->expectException(RoundingNecessaryException::class);
+        $this->expectExceptionMessageExact('This decimal number cannot be represented as an integer without rounding.');
+
+        $number->toInt();
+    }
+
+    public static function providerToIntThrowsRoundingNecessaryException(): array
+    {
+        return [
+            ['1.2'],
+            ['-1.2'],
+        ];
+    }
+
+    /**
+     * @param string $value The big decimal value.
+     * @param float  $float The expected float value.
+     */
+    #[DataProvider('providerToFloat')]
+    public function testToFloat(string $value, float $float): void
+    {
+        self::assertSame($float, BigDecimal::of($value)->toFloat());
+    }
+
+    public static function providerToFloat(): array
+    {
+        return [
+            ['0', 0.0],
+            ['1.6', 1.6],
+            ['-1.6', -1.6],
+            ['9.999999999999999999999999999999999999999999999999999999999999', 9.999999999999999999999999999999],
+            ['-9.999999999999999999999999999999999999999999999999999999999999', -9.999999999999999999999999999999],
+            ['9.9e3000', INF],
+            ['-9.9e3000', -INF],
+        ];
+    }
+
+    #[DataProvider('providerToFloatIsStableAcrossLosslessToBigRationalConversion')]
+    public function testToFloatIsStableAcrossLosslessToBigRationalConversion(string $value): void
+    {
+        $decimal = BigDecimal::of($value);
+
+        self::assertSame(
+            bin2hex(pack('E', $decimal->toFloat())),
+            bin2hex(pack('E', $decimal->toBigRational()->toFloat())),
+            sprintf('BigDecimal::toFloat() changed after lossless toBigRational() conversion for %s.', $value),
+        );
+    }
+
+    public static function providerToFloatIsStableAcrossLosslessToBigRationalConversion(): array
+    {
+        return [
+            ['3e-308'],
+            ['-3e-308'],
+            ['-1e-500'],
+        ];
+    }
+
+    /**
+     * @param string $unscaledValue The unscaled value.
+     * @param int    $scale         The scale.
+     * @param string $expected      The expected string representation.
+     */
+    #[DataProvider('providerToString')]
+    public function testToString(string $unscaledValue, int $scale, string $expected): void
+    {
+        $bigDecimal = BigDecimal::ofUnscaledValue($unscaledValue, $scale);
+        self::assertSame($expected, $bigDecimal->toString());
+        self::assertSame($expected, (string) $bigDecimal);
+    }
+
+    public static function providerToString(): array
+    {
+        return [
+            ['0',   0, '0'],
+            ['0',   1, '0.0'],
+            ['1',   1, '0.1'],
+            ['0',   2, '0.00'],
+            ['1',   2, '0.01'],
+            ['10',  2, '0.10'],
+            ['11',  2, '0.11'],
+            ['11',  3, '0.011'],
+            ['1',   0, '1'],
+            ['10',  1, '1.0'],
+            ['11',  1, '1.1'],
+            ['100', 2, '1.00'],
+            ['101', 2, '1.01'],
+            ['110', 2, '1.10'],
+            ['111', 2, '1.11'],
+            ['111', 3, '0.111'],
+            ['111', 4, '0.0111'],
+
+            ['-1',   1, '-0.1'],
+            ['-1',   2, '-0.01'],
+            ['-10',  2, '-0.10'],
+            ['-11',  2, '-0.11'],
+            ['-12',  3, '-0.012'],
+            ['-12',  4, '-0.0012'],
+            ['-1',   0, '-1'],
+            ['-10',  1, '-1.0'],
+            ['-12',  1, '-1.2'],
+            ['-100', 2, '-1.00'],
+            ['-101', 2, '-1.01'],
+            ['-120', 2, '-1.20'],
+            ['-123', 2, '-1.23'],
+            ['-123', 3, '-0.123'],
+            ['-123', 4, '-0.0123'],
+        ];
+    }
+
+    public function testSerialize(): void
+    {
+        $number = '-123456789098.7654321012345678909876543210123456789';
+        $bigDecimal = BigDecimal::of($number);
+
+        /** @var BigDecimal $deserialized */
+        $deserialized = unserialize(serialize($bigDecimal));
+
+        self::assertBigDecimalEquals($number, $deserialized);
+    }
+
+    public function testDirectCallToUnserialize(): void
+    {
+        $zero = BigDecimal::zero();
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageExact('__unserialize() is an internal function, it must not be called directly.');
+
+        // @phpstan-ignore argument.type
+        $zero->__unserialize([]);
+    }
+
+    /**
+     * @param float  $value    The float value.
+     * @param string $expected The expected string representation.
+     */
+    #[DataProvider('providerFromFloatExact')]
+    public function testFromFloatExact(float $value, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::fromFloatExact($value));
+    }
+
+    public static function providerFromFloatExact(): Generator
+    {
+        $tests = [
+            [0.0, '0'],
+            [1.0, '1'],
+            [2.0, '2'],
+            [3.0, '3'],
+
+            [0.5, '0.5'],
+            [0.25, '0.25'],
+            [0.125, '0.125'],
+            [0.0625, '0.0625'],
+            [0.03125, '0.03125'],
+            [0.015625, '0.015625'],
+            [0.0078125, '0.0078125'],
+            [0.00390625, '0.00390625'],
+            [0.001953125, '0.001953125'],
+            [0.0009765625, '0.0009765625'],
+
+            [1.5, '1.5'],
+            [1.25, '1.25'],
+            [1.125, '1.125'],
+            [1.0625, '1.0625'],
+            [1.03125, '1.03125'],
+            [1.015625, '1.015625'],
+            [1.0078125, '1.0078125'],
+            [1.00390625, '1.00390625'],
+            [1.001953125, '1.001953125'],
+            [1.0009765625, '1.0009765625'],
+
+            [0.1, '0.1000000000000000055511151231257827021181583404541015625'],
+            [0.2, '0.200000000000000011102230246251565404236316680908203125'],
+            [0.3, '0.299999999999999988897769753748434595763683319091796875'],
+            [0.4, '0.40000000000000002220446049250313080847263336181640625'],
+            [0.6, '0.59999999999999997779553950749686919152736663818359375'],
+            [0.7, '0.6999999999999999555910790149937383830547332763671875'],
+            [0.8, '0.8000000000000000444089209850062616169452667236328125'],
+            [0.9, '0.90000000000000002220446049250313080847263336181640625'],
+
+            [0.01, '0.01000000000000000020816681711721685132943093776702880859375'],
+            [0.02, '0.0200000000000000004163336342344337026588618755340576171875'],
+            [0.03, '0.0299999999999999988897769753748434595763683319091796875'],
+            [0.04, '0.040000000000000000832667268468867405317723751068115234375'],
+            [0.05, '0.05000000000000000277555756156289135105907917022705078125'],
+            [0.06, '0.059999999999999997779553950749686919152736663818359375'],
+            [0.07, '0.070000000000000006661338147750939242541790008544921875'],
+            [0.08, '0.08000000000000000166533453693773481063544750213623046875'],
+            [0.09, '0.0899999999999999966693309261245303787291049957275390625'],
+
+            [0.001, '0.001000000000000000020816681711721685132943093776702880859375'],
+            [0.002, '0.00200000000000000004163336342344337026588618755340576171875'],
+            [0.003, '0.003000000000000000062450045135165055398829281330108642578125'],
+            [0.004, '0.0040000000000000000832667268468867405317723751068115234375'],
+            [0.005, '0.005000000000000000104083408558608425664715468883514404296875'],
+            [0.006, '0.00600000000000000012490009027033011079765856266021728515625'],
+            [0.007, '0.007000000000000000145716771982051795930601656436920166015625'],
+            [0.008, '0.008000000000000000166533453693773481063544750213623046875'],
+            [0.009, '0.00899999999999999931998839741709161899052560329437255859375'],
+
+            [1e-10, '0.00000000010000000000000000364321973154977415791655470655996396089904010295867919921875'],
+            [1e-20, '0.00000000000000000000999999999999999945153271454209571651729503702787392447107715776066783064379706047475337982177734375'],
+            [1e-30, '0.000000000000000000000000000001000000000000000083336420607585985350931336026868654502364509783548862515410206308619223136702203191816806793212890625'],
+
+            [1.2e-10, '0.000000000119999999999999999201984849403306021553561322434688918292522430419921875'],
+            [1.23e-20, '0.00000000000000000001230000000000000057423043720037597978225859268919873521397519156028721454276819713413715362548828125'],
+            [1.234e-30, '0.0000000000000000000000000000012340000000000000047462505270239109583881978268617904662994691415431923210214147125507455626802766346372663974761962890625'],
+
+            [9007199254740989.0, '9007199254740989'],
+            [9007199254740990.0, '9007199254740990'],
+            [9007199254740991.0, '9007199254740991'],
+            [9007199254740992.0, '9007199254740992'],
+            [9007199254740993.0, '9007199254740992'],
+            [9007199254741000.0, '9007199254741000'],
+            [9007199254741001.0, '9007199254741000'],
+
+            [1.2345e0, '1.2344999999999999307220832633902318775653839111328125'],
+            [1.2345e1, '12.3450000000000006394884621840901672840118408203125'],
+            [1.2345e2, '123.4500000000000028421709430404007434844970703125'],
+            [1.2345e3, '1234.5'],
+            [1.2345e4, '12345'],
+            [1.2345e5, '123450'],
+            [1.2345e6, '1234500'],
+            [1.2345e7, '12345000'],
+            [1.2345e8, '123450000'],
+            [1.2345e9, '1234500000'],
+            [1.2345e10, '12345000000'],
+            [1.2345e20, '123450000000000000000'],
+            [1.2345e30, '1234500000000000028910431502336'],
+            [1.2345e40, '12344999999999999218686305631743221170176'],
+            [1.2345e50, '123450000000000007238186188243306901584825798361088'],
+            [1.2345e60, '1234500000000000054195917402950096567781497768592282134511616'],
+            [1.2345e70, '12345000000000000722994833782565911067111091532676530383764153123733504'],
+            [1.2345e80, '123450000000000009965115385973279073332817250174360046907437611130621162554392576'],
+            [1.2345e90, '1234499999999999989212293532683574125255238564200950279433809513088897811088691217060331520'],
+            [1.2345e100, '12345000000000000583883634749019137936624068583482471750845213260941541453980911162485633595979333632'],
+
+            [5.0e-308, '0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004999999999999999546633126686242309977352443670160228468536125246658239406705011085118342653055142975787891508792459114121892193962766003818849168877369149312564283417067309699948645327184686396144262383114743295839717177723110746740364718066470836083314108687777072400795578198956380274486007101948852901757669803857530995278324448851301458554889133625122008582615158136953263020720042989754677462166310212028177819966314748458494654877305674023956179973489692026000446589303656025050795588558523487357571722497435616556323536770861890497693689251099130725511831397956898302359406299883636782608012026648949531238817607629906957219438092876377943099640445584525308559876542339288782029054808095371659334419805404717713562799154269900014924132847227156162261962890625'],
+            [5.1e-308, '0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005100000000000000229257693397712318024095802559073354348990571411646074390659066807766419684408498446723420245258697628119520611466026147192545546753232247257100283500503285270768616700164346463051291665765613106920717611757371184687442021370173067795958533098995370031248950958979909419533031020721821787432260521914043090645746322263202392449367144387061909781906623461270800462728443208254556184122219604923076036372657664045156771072185843674624028510050346693651093056084777984018323258595160958021263628000317933971621535921120739171420928467089032164588162732613589730715287055696011970112041215704754279798304542298679976825744447211073380372318008699361115514417488319891792232339763370352484284096999882004706928042593594430087478031055070459842681884765625'],
+            [5.2e-308, '0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000051999999999999999237509684266892377177015757115437354993254123479843805234417575290634821753443501870592762584529513825240196380778508287129285039172157524040866915623755045889871616925211974742666866127185187106242807736776341611884193118990569923786341828852668731153630934389400077937839066870176594907647979228571816496390890750538534624533019721640911523702849999833333776453168443428904560879172958711689247384832625501782585685565887902250222699936240573225436859014444016023194055596811312845184691462847236726952459230501772866111862170674104781399986444862737762129158926260588122263991147640136650884510620733729174529150256694355289913440173515239893499213249841093273244889049199123713210009330538318736444447325240059143425241927616298198699951171875'],
+            [5.3e-308, '0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005299999999999999618244243455666157411307348864014116649660253284322686656224448250360544666280201927395132271647205136928518664689675510233311461081199257551073099624247723907205706684878048485482081559671424314327843935597897137689396602427940916961309832671538376199477235918900106168034782353313497194097335323800320208632431827844504532457236799941120394958663376505395954827905245477526355991712372137414773440593867436311360366040991736775420511477197767951436278746804025220620487860767101611015674664569129411418870310179233834050951505667731924115409126239933962695116498196421612482686188312322575897103819604447154929004306891659984602315716694348617584328232479898762856745470076454390157717769107781742581961422454417398597570354468189179897308349609375'],
+            [5.0e-324, '0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004940656458412465441765687928682213723650598026143247644255856825006755072702087518652998363616359923797965646954457177309266567103559397963987747960107818781263007131903114045278458171678489821036887186360569987307230500063874091535649843873124733972731696151400317153853980741262385655911710266585566867681870395603106249319452715914924553293054565444011274801297099995419319894090804165633245247571478690147267801593552386115501348035264934720193790268107107491703332226844753335720832431936092382893458368060106011506169809753078342277318329247904982524730776375927247874656084778203734469699533647017972677717585125660551199131504891101451037862738167250955837389733598993664809941164205702637090279242767544565229087538682506419718265533447265625'],
+            [5.1e-324, '0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004940656458412465441765687928682213723650598026143247644255856825006755072702087518652998363616359923797965646954457177309266567103559397963987747960107818781263007131903114045278458171678489821036887186360569987307230500063874091535649843873124733972731696151400317153853980741262385655911710266585566867681870395603106249319452715914924553293054565444011274801297099995419319894090804165633245247571478690147267801593552386115501348035264934720193790268107107491703332226844753335720832431936092382893458368060106011506169809753078342277318329247904982524730776375927247874656084778203734469699533647017972677717585125660551199131504891101451037862738167250955837389733598993664809941164205702637090279242767544565229087538682506419718265533447265625'],
+
+            [0.1 + 0.2, '0.3000000000000000444089209850062616169452667236328125'],
+            [0.1 * 3.0, '0.3000000000000000444089209850062616169452667236328125'],
+        ];
+
+        foreach ($tests as [$value, $expected]) {
+            yield [$value, $expected];
+            yield [-$value, $expected === '0' ? '0' : "-$expected"];
+        }
+
+        yield from [
+            [PHP_FLOAT_EPSILON, '0.0000000000000002220446049250313080847263336181640625'],
+            [PHP_FLOAT_MAX, '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'],
+            [PHP_FLOAT_MIN, '0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002225073858507201383090232717332404064219215980462331830553327416887204434813918195854283159012511020564067339731035811005152434161553460108856012385377718821130777993532002330479610147442583636071921565046942503734208375250806650616658158948720491179968591639648500635908770118304874799780887753749949451580451605050915399856582470818645113537935804992115981085766051992433352114352390148795699609591288891602992641511063466313393663477586513029371762047325631781485664350872122828637642044846811407613911477062801689853244110024161447421618567166150540154285084716752901903161322778896729707373123334086988983175067838846926092773977972858659654941091369095406136467568702398678315290680984617210924625396728515625'],
+        ];
+    }
+
+    public function testFromFloatExactNan(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('Cannot convert NaN to a BigDecimal.');
+        BigDecimal::fromFloatExact(NAN);
+    }
+
+    public function testFromFloatExactInf(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('Cannot convert INF to a BigDecimal.');
+        BigDecimal::fromFloatExact(INF);
+    }
+
+    public function testFromFloatExactNegativeInf(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('Cannot convert -INF to a BigDecimal.');
+        BigDecimal::fromFloatExact(-INF);
+    }
+
+    /**
+     * @param float  $value    The float value.
+     * @param string $expected The expected string representation.
+     */
+    #[DataProvider('providerFromFloatShortest')]
+    public function testFromFloatShortest(float $value, string $expected): void
+    {
+        self::assertBigDecimalEquals($expected, BigDecimal::fromFloatShortest($value));
+    }
+
+    public static function providerFromFloatShortest(): Generator
+    {
+        $tests = [
+            [0.0,        '0'],
+            [1.0,        '1'],
+            [0.5,        '0.5'],
+            [0.25,       '0.25'],
+            [0.1,        '0.1'],
+            [0.2,        '0.2'],
+            [0.3,        '0.3'],
+            [0.1 + 0.2,  '0.30000000000000004'],
+            [0.1 * 3.0,  '0.30000000000000004'],
+            [1.0 / 3.0,  '0.3333333333333333'],
+            [1.5,        '1.5'],
+            [1.23,       '1.23'],
+            [1.234,      '1.234'],
+            [1.2345,     '1.2345'],
+            [1.23456,    '1.23456'],
+            [1.234567,   '1.234567'],
+            [1.2345678,  '1.2345678'],
+            [1.23456789, '1.23456789'],
+            [100.0,      '100'],
+        ];
+
+        foreach ($tests as [$value, $expected]) {
+            yield [$value, $expected];
+            yield [-$value, $expected === '0' ? '0' : "-$expected"];
+        }
+    }
+
+    public function testFromFloatShortestNan(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('Cannot convert NaN to a BigDecimal.');
+        BigDecimal::fromFloatShortest(NAN);
+    }
+
+    public function testFromFloatShortestInf(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('Cannot convert INF to a BigDecimal.');
+        BigDecimal::fromFloatShortest(INF);
+    }
+
+    public function testFromFloatShortestNegativeInf(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageExact('Cannot convert -INF to a BigDecimal.');
+        BigDecimal::fromFloatShortest(-INF);
+    }
+
+    #[DataProvider('providerFromFloatShortestRoundTrip')]
+    public function testFromFloatShortestRoundTrip(float $value): void
+    {
+        $decimal = BigDecimal::fromFloatShortest($value);
+
+        self::assertSame($value, $decimal->toFloat());
+
+        if ($decimal->getScale() !== 0) {
+            foreach ([RoundingMode::Down, RoundingMode::Up] as $roundingMode) {
+                $shorter = $decimal->toScale($decimal->getScale() - 1, $roundingMode);
+                self::assertNotSame($value, $shorter->toFloat());
+            }
+        }
+    }
+
+    public static function providerFromFloatShortestRoundTrip(): Generator
+    {
+        $values = [
+            0.0,
+            0.1,
+            0.2,
+            0.25,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            1.0,
+            1.0 / 3.0,
+            0.1 + 0.2,
+            0.1 * 3.0,
+            1.5,
+            1.23,
+            1.234,
+            1.2345,
+            1.23456,
+            1.234567,
+            1.2345678,
+            1.23456789,
+            100.0,
+            M_PI,
+            M_E,
+            PHP_FLOAT_MAX,
+            PHP_FLOAT_MIN,
+            PHP_FLOAT_EPSILON,
+            1.0e-308,
+            1.2e-308,
+            1.23e-308,
+            1.234e-308,
+            5.0e-324,
+            1.0e308,
+            1.2e308,
+            1.23e308,
+            1.234e308,
+        ];
+
+        foreach ($values as $value) {
+            yield [$value];
+            yield [-$value];
+        }
+    }
+
+    public function testFromFloatShortestIgnoresSerializePrecision(): void
+    {
+        $previousSerializePrecision = ini_set('serialize_precision', '1');
+
+        try {
+            self::assertBigDecimalEquals('1.23456789', BigDecimal::fromFloatShortest(1.23456789));
+            self::assertSame('1', ini_get('serialize_precision'));
+        } finally {
+            if ($previousSerializePrecision !== false) {
+                ini_set('serialize_precision', $previousSerializePrecision);
+            }
+        }
+    }
+
+    /**
+     * @param RoundingMode $roundingMode The rounding mode.
+     * @param BigDecimal   $number       The number to round.
+     * @param string       $divisor      The divisor.
+     * @param string|null  $two          The expected rounding to a scale of two, or null if an exception is expected.
+     * @param string|null  $one          The expected rounding to a scale of one, or null if an exception is expected.
+     * @param string|null  $zero         The expected rounding to a scale of zero, or null if an exception is expected.
+     */
+    private function doTestRoundingMode(RoundingMode $roundingMode, BigDecimal $number, string $divisor, ?string $two, ?string $one, ?string $zero): void
+    {
+        foreach ([$zero, $one, $two] as $scale => $expected) {
+            if ($expected === null) {
+                try {
+                    $number->dividedBy($divisor, $scale, $roundingMode);
+                    self::fail(sprintf('Dividing %s by %s at scale %d should throw a RoundingNecessaryException.', $number, $divisor, $scale));
+                } catch (RoundingNecessaryException $e) {
+                    self::assertSame('The division result is exact but cannot be represented at the requested scale without rounding.', $e->getMessage());
+                }
+            } else {
+                $actual = $number->dividedBy($divisor, $scale, $roundingMode);
+                self::assertBigDecimalEquals($expected, $actual);
+            }
+        }
+    }
+}
