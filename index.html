@@ -9,19 +9,86 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Pager">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#7b5cf0">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
+<div class="bg" aria-hidden="true"><i class="orb o1"></i><i class="orb o2"></i><i class="orb o3"></i></div>
+
+<div class="navbar" id="navbar"><span>Family Pager</span></div>
+
 <main>
-  <header>
-    <div class="logo">❤️</div>
-    <h1>Family Pager</h1>
+  <header class="hero reveal">
+    <div class="app-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.2 3 4.5 6.5 4.5c2 0 3.7 1.1 5.5 3.2 1.8-2.1 3.5-3.2 5.5-3.2 3.5 0 5.6 3.7 4.1 7.2C19.5 16.4 12 21 12 21z"/></svg></div>
+    <div>
+      <h1>Family Pager</h1>
+      <p class="sub" id="hero-sub">نداء العائلة بلمسة واحدة</p>
+    </div>
   </header>
 
-  <section class="card" id="card-key">
-    <h2>🔑 رمز الأب</h2>
+  <!-- آخر طلب -->
+  <section class="card latest reveal" id="card-latest">
+    <div class="card-head"><h2>آخر طلب</h2><span class="pill" id="latest-pill" hidden></span></div>
+    <div id="latest-empty" class="empty">
+      <div class="empty-icon" aria-hidden="true">📟</div>
+      <p class="muted">لا يوجد طلب حتى الآن</p>
+    </div>
+    <div id="latest-body" hidden>
+      <div class="pulse-wrap"><span class="pulse"></span><span class="pulse p2"></span><div class="avatar" id="latest-avatar">❤️</div></div>
+      <p id="latest-text" class="big"></p>
+      <p id="latest-time" class="muted"></p>
+      <div class="replies" id="latest-actions">
+        <button class="reply good" id="btn-seen" type="button" data-r="seen"><span class="e">✅</span><span class="t">شفت الرسالة</span></button>
+        <button class="reply love" id="btn-coming" type="button" data-r="coming"><span class="e">❤️</span><span class="t">جاي لعندك</span></button>
+        <button class="reply warm" id="btn-five" type="button" data-r="five"><span class="e">⏱️</span><span class="t">خمس دقايق</span></button>
+        <button class="reply cool" id="btn-later" type="button" data-r="later"><span class="e">🙏</span><span class="t">بعد شوي</span></button>
+        <button class="reply pink wide" id="btn-hug" type="button" data-r="hug"><span class="e">🤗</span><span class="t">حضن كبير</span></button>
+      </div>
+      <form class="compose" id="compose" autocomplete="off">
+        <div class="chips" id="chips">
+          <button type="button" class="chip" data-t="تعال لعندي ❤️">تعال لعندي ❤️</button>
+          <button type="button" class="chip" data-t="أنا مشغول شوي">أنا مشغول شوي</button>
+          <button type="button" class="chip" data-t="الأكل جاهز 🍽️">الأكل جاهز 🍽️</button>
+          <button type="button" class="chip" data-t="أحبك 😘">أحبك 😘</button>
+        </div>
+        <div class="row">
+          <input id="compose-input" type="text" maxlength="120" placeholder="اكتب رسالة قصيرة للتلفزيون…" aria-label="رسالة قصيرة">
+          <button class="btn small" id="compose-send" type="submit">إرسال</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- إحصاءات -->
+  <section class="card reveal" id="card-stats" hidden>
+    <div class="card-head"><h2>هذا الأسبوع</h2></div>
+    <div class="stats">
+      <div><b id="st-total">0</b><span>نداء</span></div>
+      <div><b id="st-answered">0</b><span>تم الرد</span></div>
+      <div><b id="st-avg">—</b><span>متوسط زمن الرد</span></div>
+    </div>
+  </section>
+
+  <!-- السجل -->
+  <section class="card reveal" id="card-history" hidden>
+    <div class="card-head"><h2>السجل</h2><button class="link" id="btn-clear-history" type="button">مسح</button></div>
+    <ul class="list" id="history"></ul>
+  </section>
+
+  <!-- الإشعارات -->
+  <section class="card reveal" id="card-setup">
+    <div class="card-head"><h2>الإشعارات</h2></div>
+    <p id="support-status" class="status">جارٍ الفحص…</p>
+    <button class="btn" id="btn-enable" type="button">تفعيل الإشعارات</button>
+    <button class="btn alt" id="btn-test" type="button">إرسال تنبيه تجريبي إلى هاتفي</button>
+    <p id="action-status" class="status" aria-live="polite"></p>
+  </section>
+
+  <!-- رمز الأب -->
+  <section class="card reveal" id="card-key">
+    <div class="card-head"><h2>رمز الأب</h2></div>
     <p class="muted" id="key-hint">أدخل الرمز الظاهر في صفحة الإعداد (مرة واحدة فقط).</p>
     <form id="key-form" class="row">
       <input id="key-input" type="text" dir="ltr" autocomplete="off" autocapitalize="characters" placeholder="ABCD2345">
@@ -29,39 +96,68 @@
     </form>
   </section>
 
-  <section class="card" id="card-setup">
-    <h2>🔔 الإشعارات</h2>
-    <p id="support-status" class="status">جارٍ الفحص…</p>
-    <button class="btn" id="btn-enable" type="button">تفعيل الإشعارات</button>
-    <button class="btn alt" id="btn-test" type="button">إرسال تنبيه تجريبي إلى هاتفي</button>
-    <p id="action-status" class="status" aria-live="polite"></p>
+  <!-- ساعات الهدوء -->
+  <section class="card reveal" id="card-quiet">
+    <div class="card-head"><h2>ساعات الهدوء</h2></div>
+    <div class="cell">
+      <span>كتم النداءات تلقائياً</span>
+      <label class="switch"><input type="checkbox" id="sw-quiet"><i></i></label>
+    </div>
+    <div class="cell" id="quiet-times">
+      <span>من <input type="time" id="quiet-start" value="22:00" aria-label="بداية الهدوء"> إلى <input type="time" id="quiet-end" value="07:00" aria-label="نهاية الهدوء"></span>
+    </div>
+    <p class="muted">خلال هذه الفترة لا يصلك إشعار، ويرى الطفل «بابا مشغول».</p>
   </section>
 
-  <section class="card" id="card-guide">
-    <h2>📲 كيف أجهّز الآيفون؟</h2>
-    <ol>
-      <li>افتح الموقع في <b>Safari</b> (iOS 16.4 أو أحدث).</li>
-      <li>اضغط <b>Share</b> ثم <b>Add to Home Screen</b>.</li>
-      <li>افتح التطبيق من <b>الشاشة الرئيسية</b>.</li>
-      <li>اضغط «تفعيل الإشعارات».</li>
-      <li>وافق على الإذن.</li>
-      <li>اضغط «إرسال تنبيه تجريبي إلى هاتفي».</li>
-    </ol>
-  </section>
-
-  <section class="card" id="card-latest">
-    <h2>📟 آخر طلب</h2>
-    <div id="latest-empty" class="muted">لا يوجد طلب حتى الآن.</div>
-    <div id="latest-body" hidden>
-      <p id="latest-text" class="big"></p>
-      <p id="latest-time" class="muted"></p>
-      <div class="actions" id="latest-actions">
-        <button class="btn good" id="btn-seen" type="button">✅ شفت الرسالة</button>
-        <button class="btn love" id="btn-coming" type="button">❤️ جاي لعندك</button>
+  <!-- التخصيص -->
+  <section class="card reveal" id="card-prefs">
+    <div class="card-head"><h2>التخصيص</h2></div>
+    <div class="cell">
+      <span>لون التطبيق</span>
+      <div class="swatches" id="swatches" role="radiogroup" aria-label="لون التطبيق">
+        <button type="button" role="radio" data-c="blue" style="--c:#0a84ff" aria-label="أزرق"></button>
+        <button type="button" role="radio" data-c="purple" style="--c:#bf5af2" aria-label="بنفسجي"></button>
+        <button type="button" role="radio" data-c="pink" style="--c:#ff375f" aria-label="وردي"></button>
+        <button type="button" role="radio" data-c="orange" style="--c:#ff9f0a" aria-label="برتقالي"></button>
+        <button type="button" role="radio" data-c="green" style="--c:#30d158" aria-label="أخضر"></button>
       </div>
     </div>
+    <div class="cell">
+      <span>المظهر</span>
+      <div class="seg" id="seg-theme" role="radiogroup" aria-label="المظهر">
+        <button type="button" role="radio" data-v="auto">تلقائي</button>
+        <button type="button" role="radio" data-v="light">فاتح</button>
+        <button type="button" role="radio" data-v="dark">داكن</button>
+      </div>
+    </div>
+    <div class="cell">
+      <span>الحركات</span>
+      <label class="switch"><input type="checkbox" id="sw-motion" checked><i></i></label>
+    </div>
+    <div class="cell">
+      <span>اهتزاز عند اللمس</span>
+      <label class="switch"><input type="checkbox" id="sw-haptic" checked><i></i></label>
+    </div>
+  </section>
+
+  <!-- الدليل -->
+  <section class="card reveal" id="card-guide">
+    <details>
+      <summary><h2>كيف أجهّز الآيفون؟</h2><i class="chev" aria-hidden="true"></i></summary>
+      <ol class="steps">
+        <li>افتح الموقع في <b>Safari</b> (iOS 16.4 أو أحدث).</li>
+        <li>اضغط <b>Share</b> ثم <b>Add to Home Screen</b>.</li>
+        <li>افتح التطبيق من <b>الشاشة الرئيسية</b>.</li>
+        <li>اضغط «تفعيل الإشعارات».</li>
+        <li>وافق على الإذن.</li>
+        <li>اضغط «إرسال تنبيه تجريبي إلى هاتفي».</li>
+      </ol>
+    </details>
   </section>
 </main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<canvas id="fx" aria-hidden="true"></canvas>
 <script src="app.js"></script>
 </body>
 </html>

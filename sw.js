@@ -27,12 +27,56 @@ self.addEventListener('push', function (event) {
     renotify: true,
     data: { rid: data.rid || null, test: !!data.test }
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  // أزرار الردّ السريع (تظهر على Android وسطح المكتب؛ iOS لا يدعم أزرار الإشعار)
+  if (data.rid) {
+    options.actions = [
+      { action: 'coming', title: 'جاي لعندك ❤️' },
+      { action: 'five', title: 'خمس دقايق ⏱️' }
+    ];
+  }
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(title, options),
+    data.rid && self.navigator && self.navigator.setAppBadge ? self.navigator.setAppBadge(1).catch(function () {}) : null
+  ]));
 });
+
+function readParentKey() {
+  return new Promise(function (resolve) {
+    try {
+      var open = indexedDB.open('fp', 1);
+      open.onupgradeneeded = function () { open.result.createObjectStore('kv'); };
+      open.onerror = function () { resolve(''); };
+      open.onsuccess = function () {
+        var get = open.result.transaction('kv').objectStore('kv').get('parent_key');
+        get.onsuccess = function () { resolve(get.result || ''); };
+        get.onerror = function () { resolve(''); };
+      };
+    } catch (e) { resolve(''); }
+  });
+}
+
+function quickRespond(rid, response) {
+  return readParentKey().then(function (key) {
+    if (!key) return false;
+    return fetch(new URL('api/respond.php', self.registration.scope).href, {
+      method: 'POST',
+      headers: { 'X-Parent-Key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rid: rid, response: response })
+    }).then(function (r) { return r.ok; }).catch(function () { return false; });
+  });
+}
 
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
   var rid = event.notification.data && event.notification.data.rid;
+
+  if (rid && (event.action === 'coming' || event.action === 'five')) {
+    event.waitUntil(quickRespond(rid, event.action).then(function (ok) {
+      if (self.navigator && self.navigator.clearAppBadge) self.navigator.clearAppBadge().catch(function () {});
+      if (!ok) return self.registration.showNotification('تعذّر إرسال الرد', { body: 'افتح التطبيق وردّ من هناك.', dir: 'rtl', lang: 'ar', icon: 'icons/icon-192.png' });
+    }));
+    return;
+  }
   var target = new URL(rid ? './?r=' + encodeURIComponent(rid) : './', self.registration.scope).href;
 
   event.waitUntil(

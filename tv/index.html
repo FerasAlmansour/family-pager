@@ -9,9 +9,18 @@
 <body data-state="idle">
 <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
 <main class="stage">
+  <button id="btn-avatar" class="avatar-btn" type="button" aria-label="غيّر الصورة">🙂</button>
   <h1 id="greeting">أهلاً عبودة ❤️</h1>
+  <div id="sticker" class="sticker" aria-hidden="true"></div>
   <button id="btn-main" class="big-btn" type="button">نادِ بابا</button>
+  <div id="reasons" class="reasons">
+    <button class="reason-btn" type="button" data-reason="hungry">🍽️ جوعان</button>
+    <button class="reason-btn" type="button" data-reason="help">🆘 بدي مساعدة</button>
+    <button class="reason-btn" type="button" data-reason="play">🎮 تعال نلعب</button>
+    <button class="reason-btn" type="button" data-reason="night">🌙 تصبح على خير</button>
+  </div>
   <p id="message" class="message" aria-live="polite"></p>
+  <div id="timer" class="timer"><div id="timer-text" class="timer-text"></div><div class="timer-track"><div id="timer-bar" class="timer-bar"></div></div></div>
   <p id="notice" class="notice"></p>
 </main>
 <script src="config.js"></script>

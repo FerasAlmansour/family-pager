@@ -1,75 +1,168 @@
-/* مصمم لشاشة 1920x1080 على Chromium 63: بلا flex-gap ولا inset، وحركات خفيفة (transform/opacity فقط). */
+/* مصمم لشاشة 1920x1080 على Chromium 63: بلا flex-gap ولا inset ولا color-mix، وحركات خفيفة (transform/opacity فقط). */
 html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden}
 html{font-size:.5208333vw} /* 1rem = 10px عند عرض 1920 */
 body{
   position:relative;
-  background:linear-gradient(160deg,#cfe8ff 0%,#e6dcff 50%,#ffe0ec 100%);
-  font-family:"SamsungOneArabic","Samsung One","Noto Sans Arabic","Segoe UI",Tahoma,Arial,sans-serif;
-  color:#2f2a63;
+  background:linear-gradient(160deg,#dcebff 0%,#ece3ff 50%,#ffe6f0 100%);
+  font-family:"SF Pro Display","SamsungOneArabic","Samsung One","Noto Sans Arabic","Segoe UI",Tahoma,Arial,sans-serif;
+  color:#1d1d1f;
 }
-.blob{position:absolute;border-radius:50%;opacity:.55}
-.b1{width:60rem;height:60rem;right:-12rem;top:-16rem;background:#ffd3e4}
-.b2{width:48rem;height:48rem;left:-10rem;bottom:-14rem;background:#c5e6ff}
-.b3{width:30rem;height:30rem;left:24rem;top:6rem;background:#fff1b8;opacity:.6}
+body.night{background:linear-gradient(160deg,#0b1020 0%,#1a1236 55%,#2a1030 100%);color:#f5f5f7}
+body.night .blob{opacity:.18}
+body.night .notice{color:#ffcc66}
+
+/* فقاعات ملوّنة تتحرك ببطء */
+.blob{position:absolute;border-radius:50%;opacity:.55;animation:fp-drift 16s ease-in-out infinite alternate}
+.b1{width:60rem;height:60rem;right:-12rem;top:-16rem;background:#ffc2da}
+.b2{width:48rem;height:48rem;left:-10rem;bottom:-14rem;background:#b5dcff;animation-duration:21s}
+.b3{width:30rem;height:30rem;left:24rem;top:6rem;background:#fff1b8;opacity:.6;animation-duration:26s}
+@keyframes fp-drift{to{transform:translate(-5rem,6rem) scale(1.12)}}
 
 .stage{position:absolute;left:0;right:0;top:0;bottom:0;text-align:center}
 h1{
   position:absolute;left:0;right:0;top:11rem;margin:0;
   font-size:8.4rem;font-weight:800;letter-spacing:0;
+  animation:fp-rise .9s cubic-bezier(.22,1,.36,1) both;
 }
+
+/* صورة الطفل */
+.avatar-btn{
+  position:absolute;left:5rem;top:5rem;width:12rem;height:12rem;border:0;border-radius:50%;
+  font-size:6.4rem;line-height:12rem;padding:0;outline:none;cursor:pointer;
+  background:rgba(255,255,255,.7);box-shadow:0 1rem 3rem rgba(0,0,0,.12);
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shadow .2s;
+}
+.avatar-btn:focus{transform:scale(1.15);box-shadow:0 0 0 1rem #fff,0 0 0 1.8rem #0a84ff}
+.avatar-btn.bump{animation:fp-pop .5s cubic-bezier(.34,1.56,.64,1)}
+body.night .avatar-btn{background:rgba(255,255,255,.15)}
+
+/* الزر الرئيسي */
 .big-btn{
   position:absolute;left:50%;top:50%;
-  width:90rem;height:28rem;margin:-14rem 0 0 -45rem;
+  width:90rem;height:28rem;margin:-18rem 0 0 -45rem;
   border:0;border-radius:14rem;
   font-family:inherit;font-size:11rem;font-weight:800;color:#fff;
-  background:linear-gradient(135deg,#ff6fa5 0%,#ff4d86 100%);
-  box-shadow:0 2.4rem 5rem rgba(255,77,134,.35);
+  background:linear-gradient(135deg,#ff6fa5 0%,#d70f40 100%);
+  box-shadow:0 2.4rem 5rem rgba(215,15,64,.35);
   outline:none;cursor:pointer;
-  -webkit-transform:scale(1);transform:scale(1);
-  transition:-webkit-transform .18s,transform .18s,box-shadow .18s;
+  transform:scale(1);
+  transition:transform .35s cubic-bezier(.34,1.56,.64,1),box-shadow .25s;
 }
+body[data-state="idle"] .big-btn{animation:fp-breathe 3.2s ease-in-out infinite}
 .big-btn::before{content:"\2764\FE0F\00a0"}
-.big-btn:focus,.big-btn.focus{
-  -webkit-transform:scale(1.07);transform:scale(1.07);
-  box-shadow:0 0 0 1.6rem #fff,0 0 0 2.6rem #7b5cf0,0 3.6rem 7rem rgba(123,92,240,.45);
+.big-btn:focus{
+  animation:none!important;
+  transform:scale(1.07);
+  box-shadow:0 0 0 1.6rem #fff,0 0 0 2.6rem #0a84ff,0 3.6rem 7rem rgba(10,132,255,.4);
 }
-.big-btn[disabled]{opacity:.45;box-shadow:none;-webkit-transform:scale(1);transform:scale(1)}
+.big-btn[disabled]{opacity:.45;box-shadow:none;transform:scale(1)}
+
+/* أسباب النداء */
+.reasons{position:absolute;left:0;right:0;top:72rem;white-space:nowrap}
+.reason-btn{
+  display:inline-block;width:38rem;height:13rem;margin:0 1.4rem;border:0;border-radius:6.5rem;
+  font-family:inherit;font-size:4.6rem;font-weight:700;color:#1d1d1f;
+  background:rgba(255,255,255,.78);box-shadow:0 1.2rem 3rem rgba(60,60,120,.14);
+  outline:none;cursor:pointer;transform:scale(1);
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shadow .2s;
+}
+.reason-btn:focus{transform:scale(1.09);box-shadow:0 0 0 1.2rem #fff,0 0 0 2rem #0a84ff,0 2.4rem 5rem rgba(10,132,255,.35)}
+body.night .reason-btn{background:rgba(255,255,255,.14);color:#f5f5f7}
+
+/* ملصق متحرك */
+.sticker{position:absolute;left:0;right:0;top:5rem;font-size:16rem;line-height:1.1;display:none}
+body[data-state="calling"] .sticker,body[data-state="sent"] .sticker,
+body[data-state="seen"] .sticker,body[data-state="coming"] .sticker,body[data-state="five"] .sticker,
+body[data-state="later"] .sticker,body[data-state="hug"] .sticker,body[data-state="text"] .sticker,
+body[data-state="quiet"] .sticker,body[data-state="failed"] .sticker,body[data-state="expired"] .sticker{display:block;animation:fp-pop .7s cubic-bezier(.34,1.56,.64,1) both}
+body[data-state="calling"] .sticker,body[data-state="sent"] .sticker{top:9rem;animation:fp-float 2.2s ease-in-out infinite}
+body[data-state="coming"] .sticker{animation:fp-run 1.1s ease-in-out infinite alternate}
+body[data-state="hug"] .sticker{animation:fp-beat 1.2s ease-in-out infinite}
+body[data-state="five"] .sticker{animation:fp-wobble 1.6s ease-in-out infinite}
+body[data-state="later"] .sticker{animation:fp-sway 2.4s ease-in-out infinite}
 
 .message{
   position:absolute;left:4rem;right:4rem;bottom:15rem;margin:0;
   font-size:7rem;font-weight:700;min-height:9rem;line-height:1.3;
 }
-.notice{position:absolute;left:0;right:0;bottom:6rem;margin:0;font-size:3.4rem;color:#7a5a00;min-height:4.5rem}
+.notice{position:absolute;left:0;right:0;bottom:6rem;margin:0;font-size:3.4rem;color:#9a6700;min-height:4.5rem}
 
-/* حالات الشاشة */
+/* مؤقت خمس دقايق */
+.timer{position:absolute;left:0;right:0;top:44rem;display:none}
+body[data-state="five"] .timer{display:block}
+.timer-text{font-size:7rem;font-weight:800;line-height:1.1;color:#c77700;direction:ltr;letter-spacing:.3rem}
+.timer-track{width:60rem;height:1.2rem;margin:1rem auto 0;border-radius:.6rem;background:rgba(0,0,0,.1);overflow:hidden}
+.timer-bar{width:100%;height:100%;background:#ff9f0a;transform-origin:100% 50%;transition:transform 1s linear}
+
+/* حالات الشاشة: نخفي الترحيب وأسباب النداء والصورة خارج الوضع الجاهز */
+body:not([data-state="idle"]) h1,
+body:not([data-state="idle"]) .reasons,
+body:not([data-state="idle"]) .avatar-btn{display:none}
+
 body[data-state="calling"] .big-btn,
 body[data-state="sent"] .big-btn{display:none}
 body[data-state="calling"] .message,
-body[data-state="sent"] .message{bottom:auto;top:50%;margin-top:-5rem;font-size:9rem}
+body[data-state="sent"] .message{bottom:auto;top:50%;margin-top:-2rem;font-size:8.4rem}
 body[data-state="calling"] .message{opacity:.9}
 
 body[data-state="seen"] .big-btn,
 body[data-state="coming"] .big-btn,
+body[data-state="five"] .big-btn,
+body[data-state="later"] .big-btn,
+body[data-state="hug"] .big-btn,
+body[data-state="text"] .big-btn,
+body[data-state="quiet"] .big-btn,
 body[data-state="failed"] .big-btn,
 body[data-state="expired"] .big-btn,
 body[data-state="setup"] .big-btn{
-  height:15rem;width:50rem;margin:6rem 0 0 -25rem;font-size:7rem;border-radius:8rem;
-  background:linear-gradient(135deg,#8d72ff 0%,#6a4be6 100%);box-shadow:0 1.6rem 3.6rem rgba(106,75,230,.35);
+  height:15rem;width:50rem;margin:12rem 0 0 -25rem;font-size:7rem;border-radius:8rem;
+  background:linear-gradient(135deg,#5ac8fa 0%,#0071e3 100%);box-shadow:0 1.6rem 3.6rem rgba(0,113,227,.35);
+  animation:none;
 }
 body[data-state="seen"] .big-btn::before,
 body[data-state="coming"] .big-btn::before,
+body[data-state="five"] .big-btn::before,
+body[data-state="later"] .big-btn::before,
+body[data-state="hug"] .big-btn::before,
+body[data-state="text"] .big-btn::before,
+body[data-state="quiet"] .big-btn::before,
 body[data-state="failed"] .big-btn::before,
 body[data-state="expired"] .big-btn::before,
 body[data-state="setup"] .big-btn::before{content:""}
+
 body[data-state="seen"] .message,
 body[data-state="coming"] .message,
+body[data-state="five"] .message,
+body[data-state="later"] .message,
+body[data-state="hug"] .message,
+body[data-state="text"] .message,
+body[data-state="quiet"] .message,
 body[data-state="failed"] .message,
 body[data-state="expired"] .message,
-body[data-state="setup"] .message{bottom:auto;top:30rem;font-size:9rem}
-body[data-state="coming"] .message{color:#c2185b}
+body[data-state="setup"] .message{bottom:auto;top:30rem;font-size:9rem;animation:fp-pop .7s cubic-bezier(.34,1.56,.64,1) both}
+body[data-state="setup"] .message{top:20rem}
+body[data-state="text"] .message{font-size:6.8rem;color:#0071e3}
+body[data-state="coming"] .message,body[data-state="hug"] .message{color:#d70a53}
+body[data-state="five"] .message{color:#c77700;font-size:8rem}
+body[data-state="later"] .message{color:#5e5ce6}
+body[data-state="quiet"] .message{font-size:7.6rem}
 body[data-state="failed"] .message,body[data-state="setup"] .message{color:#8a3b00;font-size:6.4rem}
+body.night[data-state="text"] .message{color:#64d2ff}
+body.night[data-state="five"] .message{color:#ffb340}
+body.night[data-state="later"] .message{color:#a5a3ff}
+body.night[data-state="failed"] .message,body.night[data-state="setup"] .message{color:#ffb98a}
+body.night[data-state="coming"] .message,body.night[data-state="hug"] .message{color:#ff7aa8}
+body.night .timer-text{color:#ffb340}
+body.night .timer-track{background:rgba(255,255,255,.18)}
 
-body[data-state="calling"] .message,body[data-state="sent"] .message{
-  -webkit-animation:fp-pulse 1.6s ease-in-out infinite;animation:fp-pulse 1.6s ease-in-out infinite}
-@-webkit-keyframes fp-pulse{0%,100%{opacity:1}50%{opacity:.55}}
+body[data-state="calling"] .message,body[data-state="sent"] .message{animation:fp-pulse 1.6s ease-in-out infinite}
+
 @keyframes fp-pulse{0%,100%{opacity:1}50%{opacity:.55}}
+@keyframes fp-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+@keyframes fp-rise{from{opacity:0;transform:translateY(3rem)}to{opacity:1;transform:none}}
+@keyframes fp-pop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
+@keyframes fp-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-2rem)}}
+@keyframes fp-run{from{transform:translateX(-9rem)}to{transform:translateX(9rem)}}
+@keyframes fp-beat{0%,100%{transform:scale(1)}15%{transform:scale(1.18)}30%{transform:scale(1)}45%{transform:scale(1.12)}}
+@keyframes fp-wobble{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}}
+@keyframes fp-sway{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-1.4rem) rotate(4deg)}}

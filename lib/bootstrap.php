@@ -34,8 +34,49 @@ function fp_db(): PDO
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
         $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+        fp_migrate($pdo);
     }
     return $pdo;
+}
+
+/** يضيف أعمدة الميزات الجديدة تلقائياً للقواعد القديمة (يتخطى الموجود). */
+function fp_migrate(PDO $pdo): void
+{
+    try {
+        $pdo->query('SELECT reason, reply_text FROM pager_requests LIMIT 0');
+        return;
+    } catch (Throwable $e) {
+        // عمود ناقص: نضيف كلاً على حدة
+    }
+    foreach (['reason VARCHAR(16) NULL', 'reply_text VARCHAR(160) NULL'] as $col) {
+        try {
+            $pdo->exec('ALTER TABLE pager_requests ADD COLUMN ' . $col);
+        } catch (Throwable $e) {
+            // موجود مسبقاً أو الجدول غير منشأ بعد
+        }
+    }
+}
+
+const FP_REASONS = ['call', 'hungry', 'help', 'play', 'night'];
+const FP_REPLIES = ['seen', 'coming', 'five', 'later', 'hug', 'text'];
+
+/** هل نحن الآن ضمن ساعات الهدوء التي ضبطها الأب؟ */
+function fp_quiet_now(): bool
+{
+    if (fp_setting('quiet_on', '0') !== '1') {
+        return false;
+    }
+    $parse = static function (string $hm): int {
+        return preg_match('/^(\d{1,2}):(\d{2})$/', $hm, $m) ? ((int) $m[1] * 60 + (int) $m[2]) : 0;
+    };
+    $start = $parse((string) fp_setting('quiet_start', '22:00'));
+    $end = $parse((string) fp_setting('quiet_end', '07:00'));
+    $tz = (int) fp_setting('quiet_tz', '0');
+    $now = (((int) floor(time() / 60) + $tz) % 1440 + 1440) % 1440;
+    if ($start === $end) {
+        return false;
+    }
+    return $start < $end ? ($now >= $start && $now < $end) : ($now >= $start || $now < $end);
 }
 
 function fp_now(): string
@@ -178,6 +219,8 @@ function fp_public_request(array $row): array
         'status' => $status,
         'created_at' => $row['created_at'],
         'responded_at' => $row['responded_at'],
+        'reason' => $row['reason'] ?? null,
+        'reply_text' => $row['reply_text'] ?? null,
     ];
 }
 

@@ -7,6 +7,12 @@ fp_cors_for_tv();
 fp_method('POST');
 fp_require_tv();
 
+$in = fp_input();
+$reason = (string) ($in['reason'] ?? 'call');
+if (!in_array($reason, FP_REASONS, true)) {
+    $reason = 'call';
+}
+
 $db = fp_db();
 $cooldown = max(5, (int) fp_setting('call_cooldown_seconds', '20'));
 $now = time();
@@ -26,14 +32,30 @@ if ((int) $st->fetchColumn() >= 12) {
 }
 
 $rid = bin2hex(random_bytes(8));
-$db->prepare('INSERT INTO pager_requests (rid, status, created_at) VALUES (?, ?, ?)')
-    ->execute([$rid, 'created', fp_now()]);
 
-$names = fp_names();
+// ساعات الهدوء: نسجّل الطلب دون إزعاج الهاتف، والتلفزيون يعرض «مشغول»
+if (fp_quiet_now()) {
+    $db->prepare('INSERT INTO pager_requests (rid, status, created_at, reason) VALUES (?, ?, ?, ?)')
+        ->execute([$rid, 'quiet', fp_now(), $reason]);
+    fp_json(['ok' => true, 'reused' => false] + fp_public_request(fp_find_request($rid)), 200);
+}
+
+$db->prepare('INSERT INTO pager_requests (rid, status, created_at, reason) VALUES (?, ?, ?, ?)')
+    ->execute([$rid, 'created', fp_now(), $reason]);
+
+$child = fp_names()['child'];
+$titles = [
+    'call' => $child . ' عم يناديك ❤️',
+    'hungry' => $child . ' جوعان 🍽️',
+    'help' => $child . ' بده مساعدة 🆘',
+    'play' => $child . ' بده يلعب معك 🎮',
+    'night' => $child . ' بيقولك تصبح على خير 🌙',
+];
 $results = fp_send_push('call', $rid, [
-    'title' => $names['child'] . ' عم يناديك ❤️',
+    'title' => $titles[$reason],
     'body' => 'اضغط لتفتح الرسالة وتردّ عليه',
     'rid' => $rid,
+    'reason' => $reason,
 ], 300);
 
 if (fp_any_success($results)) {
