@@ -9,7 +9,7 @@ fp_require_parent();
 
 $db = fp_db();
 $names = [
-    'child' => fp_setting('child_name', 'عبودة'),
+    'child' => fp_setting('child_name', 'مسعف'),
     'parent' => fp_setting('parent_name', 'بابا'),
 ];
 

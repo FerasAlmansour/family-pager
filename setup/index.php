@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             fp_set_setting($k, random_code($len));
                         }
                     }
-                    foreach (['child_name' => 'عبودة', 'parent_name' => 'بابا', 'call_cooldown_seconds' => '20'] as $k => $v) {
+                    foreach (['child_name' => 'مسعف', 'parent_name' => 'بابا', 'call_cooldown_seconds' => '20'] as $k => $v) {
                         if (fp_setting($k) === null) {
                             fp_set_setting($k, $v);
                         }

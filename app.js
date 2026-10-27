@@ -26,7 +26,7 @@
     night: ['🌙', 'بيقولك تصبح على خير']
   };
 
-  var state = { key: '', vapid: '', names: { child: 'عبودة', parent: 'بابا' }, reg: null, sub: null, latest: null };
+  var state = { key: '', vapid: '', names: { child: 'مسعف', parent: 'بابا' }, reg: null, sub: null, latest: null };
 
   var isStandalone = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
   var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);

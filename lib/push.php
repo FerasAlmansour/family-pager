@@ -102,7 +102,7 @@ function fp_any_success(array $results): bool
 function fp_names(): array
 {
     return [
-        'child' => fp_setting('child_name', 'عبودة'),
+        'child' => fp_setting('child_name', 'مسعف'),
         'parent' => fp_setting('parent_name', 'بابا'),
     ];
 }

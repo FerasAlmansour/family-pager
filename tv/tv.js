@@ -24,7 +24,7 @@
   var timerText = document.getElementById('timer-text');
   var timerBar = document.getElementById('timer-bar');
 
-  var names = { child: 'عبودة', parent: 'بابا' };
+  var names = { child: 'مسعف', parent: 'بابا' };
   var state = 'idle';
   var reason = 'call';
   var replyText = '';
